@@ -32,9 +32,9 @@ Full Slack ↔ n8n communication layer.
 | 21 channels created | ✅ | counsel/tasks/gen/ops groups |
 | Bot + user invited to all channels | ✅ | |
 | Slash commands registered | ✅ | /ai, /ai-status, /ai-draw, /ai-diagnose |
-| n8n events receiver workflow | ✅ | /webhook/slack-events, url_verification |
+| n8n events receiver workflow | ✅ | Code+Switch routing, app_mention → Ollama → thread reply |
 | n8n command handler workflow (ack) | ✅ | /webhook/slack-command, 3s ack working |
-| Enable Slack Event Subscriptions | 🔄 | In progress |
+| Enable Slack Event Subscriptions | ✅ | app_mention routing live |
 | Slack credentials in n8n | ✅ | Header Auth credential configured |
 
 ### Manual step: Enable Event Subscriptions
@@ -60,11 +60,11 @@ Wire slash commands and mentions to actual AI personality responses.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| `/ai` → Ollama API call | 🔲 | Async: ack → Ollama → response_url |
-| Personality routing by channel | 🔲 | #counsel-kevin → kevin:latest |
-| Personality routing by text prefix | 🔲 | `/ai kevin: <text>` → kevin |
-| Response posted back to Slack | 🔲 | Via response_url or chat.postMessage |
-| App mention handler | 🔲 | @ai-workers in channel → route to personality |
+| `/ai` → Ollama API call | ✅ | Async: ack → Ollama → response_url |
+| Personality routing by channel | ✅ | #counsel-kevin → kevin:latest |
+| Personality routing by text prefix | ✅ | `/ai kevin: <text>` → kevin |
+| Response posted back to Slack | ✅ | Via response_url or chat.postMessage |
+| App mention handler | ✅ | @ai-workers in channel → route to personality → thread reply |
 | Streaming-friendly chunked responses | 🔲 | Future: split long responses |
 
 ### How routing will work
@@ -93,9 +93,9 @@ Dedicated handlers for each slash command beyond `/ai`.
 
 | Command | Workflow | What it does |
 |---------|----------|-------------|
-| `/ai-status` | slack-status-handler | Checks Ollama, Docker, GPU, ngrok; posts to #ops-status |
-| `/ai-diagnose` | slack-diagnose-handler | Runs health checks; posts full report |
-| `/ai-draw` | slack-draw-handler | Routes to ComfyUI (Phase 5); placeholder now |
+| `/ai-status` | slack-status-handler | ✅ Checks Ollama, n8n; posts to cmd channel + #ops-status |
+| `/ai-diagnose` | slack-diagnose-handler | ✅ 5 health checks; posts full report (needs n8n restart to activate webhook) |
+| `/ai-draw` | slack-draw-handler | 🔲 Routes to ComfyUI (Phase 5); placeholder now |
 
 ### `/ai-status` implementation plan
 1. Webhook → ack immediately
@@ -111,8 +111,8 @@ Proactive monitoring, alerts, and digests without human triggering.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Hourly status post → #ops-status | 🔲 | n8n Schedule trigger |
-| Daily digest → #ops-reports | 🔲 | Summary of executions, agent usage |
+| Hourly status post → #ops-status | 🔲 | n8n Schedule trigger (future) |
+| Daily digest → #ops-digest | ✅ | Weekdays 9am ET — system health + Kevin quote (needs n8n restart) |
 | GPU overload alert → #ops-alerts | 🔲 | Threshold: >90% util for 5min |
 | Service-down alert → #ops-alerts | 🔲 | Ollama/n8n/Open WebUI down |
 | Commit notifications → #ops-updates | 🔲 | GitHub webhook → n8n → Slack |
@@ -205,3 +205,4 @@ Move from ngrok free tier to proper domain.
 | Date | Completed |
 |------|-----------|
 | 2026-03-11 | Infrastructure, ngrok, personalities, Slack channels, slash commands, /ai → Ollama working, /ai-status working, dual-channel ops posting |
+| 2026-03-11 | Fixed events receiver IF node bug (Code+Switch routing), @ai-workers mentions now route to correct personality and reply in thread, /ai-diagnose workflow built, ops-daily-digest workflow built |
