@@ -8,41 +8,138 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "webhook-node",
+      "id": "node-webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [200, 300],
       "webhookId": "slack-command"
     },
     {
       "parameters": {
-        "jsCode": "// Parse Slack slash command payload (form-encoded)\nconst body = $input.first().json.body;\n\nconst command = body.command || '/ai';\nconst text = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst channelName = body.channel_name || '';\nconst responseUrl = body.response_url || '';\n\n// Route based on command\nlet agent = 'general';\nif (command === '/ai-status') agent = 'status';\nelse if (command === '/ai-draw') agent = 'draw';\nelse if (command === '/ai-diagnose') agent = 'diagnose';\nelse if (text.toLowerCase().startsWith('kevin')) agent = 'kevin';\nelse if (text.toLowerCase().startsWith('jason')) agent = 'jason';\nelse if (text.toLowerCase().startsWith('scaachi')) agent = 'scaachi';\nelse if (text.toLowerCase().startsWith('christian')) agent = 'christian';\nelse if (text.toLowerCase().startsWith('chidi')) agent = 'chidi';\n\nreturn [{\n  json: {\n    command,\n    text,\n    userId,\n    userName,\n    channelId,\n    channelName,\n    responseUrl,\n    agent,\n    receivedAt: new Date().toISOString()\n  }\n}];"
+        "jsCode": "const body = $input.first().json.body;\nconst command = body.command || '/ai';\nconst rawText = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst channelName = body.channel_name || '';\nconst responseUrl = body.response_url || '';\n\n// Personality routing: text prefix takes priority, then channel name\nconst AGENTS = ['kevin','jason','scaachi','christian','chidi'];\nlet agent = 'kevin'; // default\nlet userText = rawText;\n\n// Check text prefix: \"kevin: question\" or \"kevin question\"\nfor (const a of AGENTS) {\n  const prefixColon = a + ':';\n  const prefixSpace = a + ' ';\n  if (rawText.toLowerCase().startsWith(prefixColon)) {\n    agent = a;\n    userText = rawText.slice(prefixColon.length).trim();\n    break;\n  } else if (rawText.toLowerCase().startsWith(prefixSpace)) {\n    agent = a;\n    userText = rawText.slice(prefixSpace.length).trim();\n    break;\n  }\n}\n\n// Fall back to channel name routing (counsel-kevin -> kevin)\nif (agent === 'kevin' && userText === rawText) {\n  for (const a of AGENTS) {\n    if (channelName.includes(a)) {\n      agent = a;\n      break;\n    }\n  }\n}\n\n// Special commands\nif (command === '/ai-status') agent = '__status';\nif (command === '/ai-diagnose') agent = '__diagnose';\nif (command === '/ai-draw') agent = '__draw';\n\nconst MODEL_MAP = {\n  kevin: 'kevin:latest',\n  jason: 'jason:latest',\n  scaachi: 'scaachi:latest',\n  christian: 'christian:latest',\n  chidi: 'chidi:latest'\n};\n\nreturn [{\n  json: {\n    command, rawText, userText, userId, userName,\n    channelId, channelName, responseUrl,\n    agent,\n    model: MODEL_MAP[agent] || 'kevin:latest',\n    isSpecialCommand: agent.startsWith('__')\n  }\n}];"
       },
-      "id": "parse-command",
+      "id": "node-parse",
       "name": "Parse Command",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [420, 300]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':robot_face: *ai-workers* received: `' + $json.command + ' ' + $json.text + '`\\n_Processing... (routed to ' + $json.agent + ')_' }) }}",
+        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':hourglass_flowing_sand: *' + $json.agent + '* is thinking...' }) }}",
         "options": {
           "responseCode": 200,
           "responseHeaders": {
-            "entries": [
-              { "name": "Content-Type", "value": "application/json" }
-            ]
+            "entries": [{ "name": "Content-Type", "value": "application/json" }]
           }
         }
       },
-      "id": "ack-command",
-      "name": "Acknowledge to Slack",
+      "id": "node-ack",
+      "name": "Ack Slack (immediate)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [680, 300]
+      "position": [640, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.isSpecialCommand }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "node-route",
+      "name": "Special Command?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [640, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, messages: [{ role: 'user', content: $json.userText }], stream: false }) }}",
+        "options": { "timeout": 300000 }
+      },
+      "id": "node-ollama",
+      "name": "Call Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ollamaResp = $input.first().json;\nconst prevData = $('Parse Command').first().json;\n\nconst content = ollamaResp.message?.content || 'No response from model.';\nconst agent = prevData.agent || 'ai-worker';\nconst userName = prevData.userName || 'you';\n\n// Slack has a 3000 char limit per block text; truncate if needed\nconst MAX = 2800;\nconst truncated = content.length > MAX\n  ? content.slice(0, MAX) + '\\n_[response truncated]_'\n  : content;\n\nreturn [{\n  json: {\n    responseUrl: prevData.responseUrl,\n    agent,\n    slackPayload: {\n      response_type: 'in_channel',\n      blocks: [\n        {\n          type: 'context',\n          elements: [{ type: 'mrkdwn', text: `:robot_face: *${agent}* responding to <@${prevData.userId}>` }]\n        },\n        {\n          type: 'section',\n          text: { type: 'mrkdwn', text: truncated }\n        }\n      ]\n    }\n  }\n}];"
+      },
+      "id": "node-format",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.slackPayload) }}",
+        "options": {}
+      },
+      "id": "node-post-slack",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Parse Command').first().json;\nreturn [{ json: {\n  responseUrl: data.responseUrl,\n  slackPayload: {\n    response_type: 'ephemeral',\n    text: ':construction: Special commands (/ai-status, /ai-diagnose, /ai-draw) are coming soon.'\n  }\n}}];"
+      },
+      "id": "node-special",
+      "name": "Special Command Stub",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.slackPayload) }}",
+        "options": {}
+      },
+      "id": "node-post-special",
+      "name": "Post Special Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300]
     }
   ],
   "connections": {
@@ -50,7 +147,25 @@
       "main": [[{ "node": "Parse Command", "type": "main", "index": 0 }]]
     },
     "Parse Command": {
-      "main": [[{ "node": "Acknowledge to Slack", "type": "main", "index": 0 }]]
+      "main": [[
+        { "node": "Ack Slack (immediate)", "type": "main", "index": 0 },
+        { "node": "Special Command?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Special Command?": {
+      "main": [
+        [{ "node": "Special Command Stub", "type": "main", "index": 0 }],
+        [{ "node": "Call Ollama", "type": "main", "index": 0 }]
+      ]
+    },
+    "Special Command Stub": {
+      "main": [[{ "node": "Post Special Response", "type": "main", "index": 0 }]]
+    },
+    "Call Ollama": {
+      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
+    },
+    "Format Response": {
+      "main": [[{ "node": "Post to Slack", "type": "main", "index": 0 }]]
     }
   },
   "settings": { "executionOrder": "v1" },
