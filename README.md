@@ -29,7 +29,7 @@ Autonomous AI agent environment running on local hardware, orchestrated by n8n, 
                      └──┬───────────┘
            ┌────────────┼────────────────┐
            ▼            ▼                ▼
-       [Slack]       [Plane]       [MCP Servers]
+       [Slack]       [Linear]      [MCP Servers]
      (Reporting)   (Tracking)    (Git, Slack, etc.)
 
  ┌─────────────────────────────────────────────┐
@@ -68,7 +68,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full component diagra
 | Portainer | 9000 |
 | Netdata | 19999 |
 | Uptime Kuma | 3001 |
-| Plane | 80/443 |
+| Linear | cloud |
 
 ## Repository Structure
 

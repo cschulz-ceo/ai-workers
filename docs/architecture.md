@@ -53,7 +53,7 @@ The ai-workers environment is an autonomous AI agent platform running entirely o
 ║   └──────────────┘  └──────────────┘  └──────────────┘                  ║
 ║                                                                          ║
 ║   Inputs:  Ollama outputs │ Webhooks │ Monitoring alerts │ Schedules    ║
-║   Outputs: Slack posts │ Plane issues │ MCP calls │ HTTP triggers       ║
+║   Outputs: Slack posts │ Linear issues │ MCP calls │ HTTP triggers       ║
 ╚══════════════════╤══════════════════════════╤══════════════════════════╝
                    │                          │
         ┌──────────┼──────────────────────────┼──────────────┐
@@ -61,7 +61,7 @@ The ai-workers environment is an autonomous AI agent platform running entirely o
         ▼          ▼                          ▼              ▼
 
 ┌──────────────┐  ┌──────────────────┐  ┌──────────┐  ┌────────────────┐
-│    SLACK     │  │     PLANE        │  │  GIT /   │  │  MCP SERVERS   │
+│    SLACK     │  │     LINEAR       │  │  GIT /   │  │  MCP SERVERS   │
 │  (Reporting) │  │  (Task Tracking) │  │  GITHUB  │  │  (Agent Tools) │
 │              │  │                  │  │          │  │                │
 │ Via Incoming │  │  Docker stack    │  │  CLI +   │  │ ┌────────────┐ │
@@ -112,7 +112,7 @@ The ai-workers environment is an autonomous AI agent platform running entirely o
 ║                       PERSISTENCE LAYER                                  ║
 ║                                                                          ║
 ║   systemd units for: ollama │ n8n │ wireguard │ netdata                  ║
-║   Docker (systemd-managed): portainer │ plane │ uptime-kuma             ║
+║   Docker (systemd-managed): portainer │ uptime-kuma             ║
 ║   Git repo (this): all configs, scripts, decisions, workflows           ║
 ╚═════════════════════════════════════════════════════════════════════════╝
 ```
@@ -135,7 +135,7 @@ Ollama (personality selected → LLM processes task)
 n8n (receives output, chains next workflow steps)
     │
     ├──▶ Slack (report result)
-    ├──▶ Plane (create/update issue)
+    ├──▶ Linear (create/update issue)
     └──▶ MCP Server (if tool use needed: Git commit, file write, etc.)
 ```
 
@@ -168,7 +168,7 @@ MCP (GitHub server) stages and commits to ai-workers repo
 n8n posts commit summary to Slack
     │
     ▼
-Plane issue marked complete
+Linear issue marked complete
 ```
 
 ---
@@ -186,7 +186,7 @@ Plane issue marked complete
 - **Port**: 5678
 - **Protocol**: HTTP / WebSocket
 - **Persistence**: Workflow JSONs exported to `workflows/`
-- **Key integrations**: Ollama, Slack, Plane, GitHub, ComfyUI, monitoring webhooks
+- **Key integrations**: Ollama, Slack, Linear, GitHub, ComfyUI, monitoring webhooks
 
 ### Open WebUI — User Interface
 - **Port**: 8080
@@ -203,10 +203,10 @@ Plane issue marked complete
 - **Keys**: Stored locally, gitignored. Example configs only in repo.
 - **systemd**: Managed via `wg-quick@wg0.service`
 
-### Plane — Project Management
+### Linear — Project Management
 - **Port**: 80 / 443
-- **Deployment**: Docker Compose stack (`services/plane/`)
-- **Integration**: n8n writes issues via Plane REST API
+- **Deployment**: Cloud SaaS — no self-hosting required
+- **Integration**: n8n writes issues via Linear GraphQL API (`linear-ai-project-manager` workflow)
 
 ### Portainer — Container Management
 - **Port**: 9000
@@ -234,6 +234,6 @@ Plane issue marked complete
 5. Slack integration (configure n8n Incoming Webhook)
 6. Git + GitHub (version control — configure after n8n is live)
 7. WireGuard (network access — independent, can be done anytime)
-8. Plane (project management — depends on n8n for full integration)
+8. Linear (project management — cloud API, requires LINEAR_API_KEY in .env)
 9. Monitoring stack (Portainer, Netdata, Uptime Kuma — depends on services being live)
 10. MCP servers + Skills (autonomy layer — built on top of everything else)

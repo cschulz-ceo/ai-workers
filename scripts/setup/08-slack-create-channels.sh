@@ -152,11 +152,11 @@ create_channel "counsel-chidi"    "Chat with Chidi — Feasibility analysis, eth
 # ── tasks-* channels ──────────────────────────────────────────────────────────
 header "tasks-* (Direct Agent Task Assignment)"
 
-create_channel "tasks-kevin"      "Assign structured tasks to Kevin. n8n creates a Plane issue per task."
-create_channel "tasks-jason"      "Assign structured tasks to Jason. n8n creates a Plane issue per task."
-create_channel "tasks-scaachi"    "Assign structured tasks to Scaachi. n8n creates a Plane issue per task."
-create_channel "tasks-christian"  "Assign structured tasks to Christian. n8n creates a Plane issue per task."
-create_channel "tasks-chidi"      "Assign structured tasks to Chidi. n8n creates a Plane issue per task."
+create_channel "tasks-kevin"      "Assign structured tasks to Kevin. n8n creates a Linear issue per task."
+create_channel "tasks-jason"      "Assign structured tasks to Jason. n8n creates a Linear issue per task."
+create_channel "tasks-scaachi"    "Assign structured tasks to Scaachi. n8n creates a Linear issue per task."
+create_channel "tasks-christian"  "Assign structured tasks to Christian. n8n creates a Linear issue per task."
+create_channel "tasks-chidi"      "Assign structured tasks to Chidi. n8n creates a Linear issue per task."
 
 # ── gen-* channels ────────────────────────────────────────────────────────────
 header "gen-* (Generative Output Feeds)"

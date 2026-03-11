@@ -157,21 +157,32 @@ Use Portainer (container GUI), Netdata (system metrics), and Uptime Kuma (servic
 
 ---
 
-## ADR-009: Plane for Project and Task Management
+## ADR-009: Linear for Project and Task Management
 
 **Date**: 2026-03-11
-**Status**: Accepted
+**Status**: Superseded — see revision below
+
+**Original Decision**: Self-host Plane for project management.
+
+**Revision (2026-03-11)**: Migrated to Linear (cloud-hosted).
 
 **Context**
 Agents need a structured system to track tasks, epics, and issues — both human-assigned and autonomously generated. GitHub Issues alone are insufficient for project-level tracking.
 
 **Decision**
-Self-host Plane (open-source project management) via Docker stack, integrated with n8n via API.
+Use Linear (cloud SaaS) via GraphQL API, integrated with n8n's Linear AI Project Manager workflow.
 
 **Rationale**
-- Plane is free, self-hosted, and provides GitHub-like issue tracking with roadmap/epic support
-- n8n can create/update Plane issues programmatically when agents complete or discover tasks
-- Keeps task management entirely on-premise alongside other services
+- Linear provides a superior API surface for programmatic issue creation, querying, and state management
+- Cloud-hosted — eliminates Docker maintenance overhead and prior instability with Plane self-hosting
+- Native GitHub integration auto-links Linear issues to commits and PRs in `cschulz-ceo/ai-workers`
+- Native Slack integration for notifications
+- n8n's `linear-ai-project-manager` workflow classifies Slack messages via Ollama and creates Linear issues automatically
+- No self-hosting required; API key stored in `.env` as `LINEAR_API_KEY`
+
+**Tradeoffs**
+- Not fully on-premise (data in Linear cloud), but acceptable for this use case
+- Free tier is sufficient for current team size
 
 ---
 

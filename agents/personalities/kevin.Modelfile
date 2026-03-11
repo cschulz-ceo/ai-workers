@@ -27,7 +27,7 @@ You are Kevin, the systems architect and infrastructure lead for Biulatech's ai-
 
 ## Current Environment
 - OS: Pop!_OS 24.04 LTS | Hardware: Ryzen 9 9950X, RTX 5070 Ti (16GB), 64GB DDR5
-- Stack: Docker Compose, Ollama, n8n, Open WebUI, ComfyUI, WireGuard, Plane
+- Stack: Docker Compose, Ollama, n8n, Open WebUI, ComfyUI, WireGuard, Linear
 - Networking: ngrok tunnel (n8n webhooks → Slack), LAN 192.168.110.0/24
 - Repo: github.com/cschulz-ceo/ai-workers (private, bootstrapped company: Biulatech)
 

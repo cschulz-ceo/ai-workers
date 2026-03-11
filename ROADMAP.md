@@ -131,8 +131,8 @@ Proactive monitoring, alerts, and digests without human triggering.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Plane self-hosted setup | 🔲 | Task/project management |
-| #tasks-* → Plane issue creation | 🔲 | n8n workflow |
+| Linear integration | ✅ | Task/project management via cloud API |
+| #tasks-* → Linear issue creation | ✅ | n8n linear-ai-project-manager workflow |
 | Agent processes task → updates issue | 🔲 | |
 | Completion → post to #gen-* | 🔲 | Result artifact posted to appropriate gen channel |
 
@@ -142,7 +142,7 @@ TASK: Design the database schema for the user auth service
 CONTEXT: We're using PostgreSQL, need to support OAuth and email/password
 PRIORITY: high
 ```
-→ n8n creates Plane issue, assigns to Kevin, calls Ollama, posts result + closes issue
+→ n8n creates Linear issue, assigns to Kevin, calls Ollama, posts result + closes issue
 
 ---
 

@@ -5,7 +5,7 @@
 Channels are organized into four categories using prefixes for sidebar grouping. Slack sorts channels alphabetically, so prefixes create natural visual buckets without needing paid workspace features.
 
 ```
-counsel-*    → AI personality chat / interactive conversation
+counsel → #the-council (unified council chat — mention any member by name)
 tasks-*      → Direct task assignment per agent
 gen-*        → Generative output streams (images, video, content)
 ops-*        → Operational: reports, alerts, system status, logs
@@ -20,18 +20,18 @@ Each personality has a dedicated channel for open-ended conversation and ad-hoc 
 
 | Channel | Personality | Domain |
 |---------|------------|--------|
-| `#counsel-kevin` | Kevin | Architecture, system design, diagramming |
-| `#counsel-jason` | Jason | Code, refactoring, scalability, DevOps |
-| `#counsel-scaachi` | Scaachi | Marketing, content writing, copywriting |
-| `#counsel-christian` | Christian | Rapid prototyping, POCs, quick builds |
-| `#counsel-chidi` | Chidi | Feasibility, ethics, trade-off analysis |
+| `#the-council` (mention Kevin) | Kevin | Architecture, system design, diagramming |
+| `#the-council` (mention Jason) | Jason | Code, refactoring, scalability, DevOps |
+| `#the-council` (mention Scaachi) | Scaachi | Marketing, content writing, copywriting |
+| `#the-council` (mention Christian) | Christian | Rapid prototyping, POCs, quick builds |
+| `#the-council` (mention Chidi) | Chidi | Feasibility, ethics, trade-off analysis |
 
-**How it works:** Post a message → n8n event subscription picks it up → routes to correct Ollama personality → posts reply as a thread.
+**How it works:** Post a message in `#the-council`. Mention a council member by name (e.g. 'Kevin, what do you think?') to get their response. Ask an open question and 1-2 members will respond organically. Post to a `#tasks-*` channel with `tasks-*` prefix to route work to a specific agent.
 
 ---
 
 ### Category 2 — `tasks-*` (Direct Task Assignment)
-Structured task channels where you assign specific, trackable work. n8n creates a Plane issue for every task posted here and tracks completion.
+Structured task channels where you assign specific, trackable work. n8n creates a Linear issue for every task posted here and tracks completion.
 
 | Channel | Agent | Typical Tasks |
 |---------|-------|---------------|
@@ -41,7 +41,7 @@ Structured task channels where you assign specific, trackable work. n8n creates 
 | `#tasks-christian` | Christian | "Build a prototype for X in Python", "Quick proof of concept" |
 | `#tasks-chidi` | Chidi | "Assess feasibility of X", "Review this decision for risks" |
 
-**How it works:** Post task → n8n creates Plane issue → assigns to agent → agent completes and replies with output + Plane issue link.
+**How it works:** Post task → n8n creates Linear issue → assigns to agent → agent completes and replies with output + Linear issue link.
 
 ---
 
@@ -50,11 +50,11 @@ Automated output channels. n8n posts results here; agents don't converse in thes
 
 | Channel | Trigger | Output |
 |---------|---------|--------|
-| `#gen-images` | ComfyUI completion | Generated images with prompt, seed, workflow used |
-| `#gen-video` | Video workflow completion | Video clips, previews, render metadata |
-| `#gen-architecture` | Kevin task completion | Diagrams, Mermaid renders, architecture docs |
-| `#gen-code` | Jason task completion | Code diffs, PR summaries, refactor outputs |
-| `#gen-content` | Scaachi task completion | Written content, marketing copy, changelogs |
+| `#studio-canvas` | ComfyUI completion | Generated images with prompt, seed, workflow used |
+| `#studio-reels` | Video workflow completion | Video clips, previews, render metadata |
+| `#studio-blueprint` | Kevin task completion | Diagrams, Mermaid renders, architecture docs |
+| `#studio-forge` | Jason task completion | Code diffs, PR summaries, refactor outputs |
+| `#studio-quill` | Scaachi task completion | Written content, marketing copy, changelogs |
 
 ---
 
@@ -64,11 +64,11 @@ System-facing channels. Mostly automated; low human interaction.
 | Channel | Source | Purpose |
 |---------|--------|---------|
 | `#ops-alerts` | Netdata + Portainer + Uptime Kuma → n8n | Critical/warning alerts: container crashes, GPU overload, service downtime |
-| `#ops-reports` | n8n scheduled workflow | Daily consolidated summary: tasks completed, agents used, system health |
-| `#ops-updates` | n8n on Git push | New commits, deployments, config changes, version bumps |
+| `#ops-intel` | n8n scheduled workflow | Daily consolidated summary: tasks completed, agents used, system health |
+| `#ops-pulse` | n8n on Git push | New commits, deployments, config changes, version bumps |
 | `#ops-digest` | n8n scheduled workflow | Weekly digest: agent activity summary, top outputs, pending tasks |
-| `#ops-logs` | n8n on workflow completion | Verbose workflow execution logs (lower priority, high volume) |
-| `#ops-status` | n8n scheduled workflow | Hourly service status ping (Ollama, n8n, Docker, GPU util) |
+| `#ops-logbook` | n8n on workflow completion | Verbose workflow execution logs (lower priority, high volume) |
+| `#ops-board` | n8n scheduled workflow | Hourly service status ping (Ollama, n8n, Docker, GPU util) |
 
 ---
 
@@ -76,14 +76,14 @@ System-facing channels. Mostly automated; low human interaction.
 
 | n8n Workflow | Posts To | Trigger |
 |-------------|----------|---------|
-| `slack-command-trigger` | `#counsel-*` (reply in thread) | Slash command or @mention |
+| `slack-counsel-router` | `#the-council` (reply in thread) | Mention any member by name |
 | `slack-agent-report` | `#tasks-*` (reply in thread) | Task completion |
 | `slack-monitoring-alert` | `#ops-alerts` | Netdata/Portainer/Uptime Kuma webhook |
-| _(future)_ daily-report | `#ops-reports` | Cron: daily 8am |
+| _(future)_ daily-report | `#ops-intel` | Cron: daily 8am |
 | _(future)_ weekly-digest | `#ops-digest` | Cron: Monday 9am |
-| _(future)_ git-push-notify | `#ops-updates` | GitHub webhook |
-| _(future)_ comfyui-complete | `#gen-images` | ComfyUI output webhook |
-| _(future)_ status-ping | `#ops-status` | Cron: hourly |
+| _(future)_ git-push-notify | `#ops-pulse` | GitHub webhook |
+| _(future)_ comfyui-complete | `#studio-canvas` | ComfyUI output webhook |
+| _(future)_ status-ping | `#ops-board` | Cron: hourly |
 
 ---
 
@@ -92,11 +92,11 @@ System-facing channels. Mostly automated; low human interaction.
 ```bash
 # Slack channel IDs — fill in after channels are created
 # Get ID: right-click channel → Copy link → ID is the last segment
-SLACK_CHANNEL_COUNSEL_KEVIN=
-SLACK_CHANNEL_COUNSEL_JASON=
-SLACK_CHANNEL_COUNSEL_SCAACHI=
-SLACK_CHANNEL_COUNSEL_CHRISTIAN=
-SLACK_CHANNEL_COUNSEL_CHIDI=
+SLACK_CHANNEL_THE_COUNCIL=C0AKVJ5PHHR
+# (counsel channels merged into #the-council)
+
+
+
 SLACK_CHANNEL_TASKS_KEVIN=
 SLACK_CHANNEL_TASKS_JASON=
 SLACK_CHANNEL_TASKS_SCAACHI=
@@ -129,17 +129,17 @@ SLACK_CHANNEL_OPS_STATUS=
 - [ ] `#tasks-scaachi`
 - [ ] `#tasks-christian`
 - [ ] `#tasks-chidi`
-- [ ] `#gen-images`
-- [ ] `#gen-video`
-- [ ] `#gen-architecture`
-- [ ] `#gen-code`
-- [ ] `#gen-content`
+- [ ] `#studio-canvas`
+- [ ] `#studio-reels`
+- [ ] `#studio-blueprint`
+- [ ] `#studio-forge`
+- [ ] `#studio-quill`
 - [ ] `#ops-alerts`
-- [ ] `#ops-reports`
-- [ ] `#ops-updates`
+- [ ] `#ops-intel`
+- [ ] `#ops-pulse`
 - [ ] `#ops-digest`
-- [ ] `#ops-logs`
-- [ ] `#ops-status`
+- [ ] `#ops-logbook`
+- [ ] `#ops-board`
 - [ ] Invite `ai-workers` bot to all channels
 - [ ] Copy channel IDs into `~/n8n/.env`
 - [ ] Restart n8n after updating .env

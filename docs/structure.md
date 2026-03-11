@@ -30,7 +30,7 @@ ai-workers/
 │   ├── open-webui/             # Config overrides, env example
 │   ├── comfyui/                # Custom nodes list, workflow examples
 │   ├── wireguard/              # WireGuard config examples (no real keys)
-│   ├── plane/                  # Docker Compose for Plane stack
+│   ├── plane/                  # Legacy — replaced by Linear (cloud)
 │   ├── portainer/              # Portainer stack config
 │   ├── netdata/                # Netdata config overrides
 │   └── uptime-kuma/            # Uptime Kuma backup/config
@@ -64,4 +64,4 @@ Keeps all human-readable documentation together. Architecture diagrams and decis
 Setup scripts are idempotent first-run installers. Maintenance scripts are recurring operational tasks (health checks, backups, log rotation). Separating them prevents accidental re-initialization during routine ops.
 
 ### `.github/ISSUE_TEMPLATE/`
-Standardized issue templates ensure that tasks created by both humans and AI agents (via n8n → GitHub MCP) follow a consistent format, making Plane/GitHub integration reliable.
+Standardized issue templates ensure that tasks created by both humans and AI agents (via n8n → GitHub MCP) follow a consistent format, making Linear/GitHub integration reliable.
