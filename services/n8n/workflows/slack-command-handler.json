@@ -12,7 +12,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "slack-command"
     },
     {
@@ -23,7 +26,10 @@
       "name": "Parse Command",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [420, 300]
+      "position": [
+        420,
+        300
+      ]
     },
     {
       "parameters": {
@@ -32,7 +38,12 @@
         "options": {
           "responseCode": 200,
           "responseHeaders": {
-            "entries": [{ "name": "Content-Type", "value": "application/json" }]
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
           }
         }
       },
@@ -40,7 +51,10 @@
       "name": "Ack Slack",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [640, 300]
+      "position": [
+        640,
+        300
+      ]
     },
     {
       "parameters": {
@@ -48,29 +62,42 @@
         "url": "http://host.docker.internal:11434/api/chat",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
         },
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ model: $json.model, messages: [{ role: 'user', content: $json.userText }], stream: false }) }}",
-        "options": { "timeout": 300000 }
+        "options": {
+          "timeout": 300000
+        }
       },
       "id": "node-ollama",
       "name": "Call Ollama",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [860, 300]
+      "position": [
+        860,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const ollamaResp = $input.first().json;\nconst parsed = $('Parse Command').first().json;\n\nconst content = ollamaResp.message?.content || 'No response from model.';\nconst MAX = 2800;\nconst truncated = content.length > MAX\n  ? content.slice(0, MAX) + '\\n_[response truncated]_'\n  : content;\n\nreturn [{ json: {\n  responseUrl: parsed.responseUrl,\n  agent: parsed.agent,\n  userId: parsed.userId,\n  slackPayload: JSON.stringify({\n    response_type: 'in_channel',\n    blocks: [\n      {\n        type: 'context',\n        elements: [{ type: 'mrkdwn', text: ':robot_face: *' + parsed.agent + '* responding to <@' + parsed.userId + '>' }]\n      },\n      {\n        type: 'section',\n        text: { type: 'mrkdwn', text: truncated }\n      }\n    ]\n  })\n}}];"
+        "jsCode": "\n// Convert common markdown to Slack mrkdwn\nfunction mdToMrkdwn(text) {\n  return text\n    .replace(/^#{1,6}\\s+(.+)$/gm, '*$1*')      // headings \u2192 bold\n    .replace(/\\*\\*(.+?)\\*\\*/gs, '*$1*')          // **bold** \u2192 *bold*\n    .replace(/__(.+?)__/gs, '*$1*')              // __bold__ \u2192 *bold*\n    .replace(/~~(.+?)~~/gs, '~$1~')             // ~~strike~~ \u2192 ~strike~\n    .replace(/\\n{3,}/g, '\\n\\n')                  // collapse excess blank lines\n    .trim();\n}\n\n// Agent emoji mapping\nconst AGENT_EMOJI = {\n  kevin: ':briefcase:',\n  jason: ':scales:',\n  scaachi: ':pencil:',\n  christian: ':compass:',\n  chidi: ':bulb:'\n};\n\nconst ollamaResp = $input.first().json;\nconst parsed = $('Parse Command').first().json;\n\nconst content = ollamaResp.message?.content || 'No response from model.';\nconst MAX = 2800;\nconst formatted = mdToMrkdwn(content);\nconst truncated = formatted.length > MAX\n  ? formatted.slice(0, MAX) + '\\n_[response truncated]_'\n  : formatted;\n\nconst emoji = AGENT_EMOJI[parsed.agent] || ':robot_face:';\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: emoji + ' ' + parsed.agent, emoji: true }\n  },\n  {\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: 'responding to <@' + parsed.userId + '>' }]\n  },\n  { type: 'divider' },\n  { type: 'section', text: { type: 'mrkdwn', text: truncated } },\n  {\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: '_model: ' + (parsed.model || parsed.agent + ':latest') + '_' }]\n  }\n];\n\nreturn [{ json: {\n  responseUrl: parsed.responseUrl,\n  agent: parsed.agent,\n  userId: parsed.userId,\n  slackPayload: JSON.stringify({\n    response_type: 'in_channel',\n    blocks\n  })\n}}];\n"
       },
       "id": "node-format",
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1080, 300]
+      "position": [
+        1080,
+        300
+      ]
     },
     {
       "parameters": {
@@ -78,7 +105,12 @@
         "url": "={{ $json.responseUrl }}",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
         },
         "sendBody": true,
         "contentType": "raw",
@@ -90,26 +122,71 @@
       "name": "Post to Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1300, 300]
+      "position": [
+        1300,
+        300
+      ]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Parse Command", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Parse Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parse Command": {
-      "main": [[{ "node": "Ack Slack", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Ack Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Ack Slack": {
-      "main": [[{ "node": "Call Ollama", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Call Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Call Ollama": {
-      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Format Response": {
-      "main": [[{ "node": "Post to Slack", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "active": false
 }

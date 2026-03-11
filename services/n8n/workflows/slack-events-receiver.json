@@ -12,7 +12,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "slack-events"
     },
     {
@@ -23,7 +26,10 @@
       "name": "Route Event",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [420, 300]
+      "position": [
+        420,
+        300
+      ]
     },
     {
       "parameters": {
@@ -35,7 +41,10 @@
       "name": "Switch Route",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 2,
-      "position": [640, 300]
+      "position": [
+        640,
+        300
+      ]
     },
     {
       "parameters": {
@@ -49,7 +58,10 @@
       "name": "Return Challenge",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [860, 100]
+      "position": [
+        860,
+        100
+      ]
     },
     {
       "parameters": {
@@ -63,7 +75,10 @@
       "name": "Ack Event",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [860, 300]
+      "position": [
+        860,
+        300
+      ]
     },
     {
       "parameters": {
@@ -77,7 +92,10 @@
       "name": "Ack Ignore",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [860, 500]
+      "position": [
+        860,
+        500
+      ]
     },
     {
       "parameters": {
@@ -104,17 +122,23 @@
       "name": "Call Ollama",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1080, 300]
+      "position": [
+        1080,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const ollamaResp = $input.first().json;\nconst parsed = $('Route Event').first().json;\n\nconst content = ollamaResp.message?.content || 'No response.';\nconst MAX = 2800;\nconst truncated = content.length > MAX\n  ? content.slice(0, MAX) + '\\n_[truncated]_'\n  : content;\n\nconst header = parsed.isTask\n  ? ':white_check_mark: *' + parsed.agent + '* completed: _' + (parsed.taskTitle || 'task').slice(0, 60) + '_'\n  : ':robot_face: *' + parsed.agent + '* responding to <@' + parsed.userId + '>';\n\nreturn [{ json: {\n  channelId: parsed.channelId,\n  thread_ts: parsed.ts,\n  payload: JSON.stringify({\n    channel: parsed.channelId,\n    thread_ts: parsed.ts,\n    blocks: [\n      { type: 'context', elements: [{ type: 'mrkdwn', text: header }] },\n      { type: 'section', text: { type: 'mrkdwn', text: truncated } }\n    ]\n  })\n}}];"
+        "jsCode": "\n// Convert common markdown to Slack mrkdwn\nfunction mdToMrkdwn(text) {\n  return text\n    .replace(/^#{1,6}\\s+(.+)$/gm, '*$1*')      // headings \u2192 bold\n    .replace(/\\*\\*(.+?)\\*\\*/gs, '*$1*')          // **bold** \u2192 *bold*\n    .replace(/__(.+?)__/gs, '*$1*')              // __bold__ \u2192 *bold*\n    .replace(/~~(.+?)~~/gs, '~$1~')             // ~~strike~~ \u2192 ~strike~\n    .replace(/\\n{3,}/g, '\\n\\n')                  // collapse excess blank lines\n    .trim();\n}\n\n// Agent emoji mapping\nconst AGENT_EMOJI = {\n  kevin: ':briefcase:',\n  jason: ':scales:',\n  scaachi: ':pencil:',\n  christian: ':compass:',\n  chidi: ':bulb:'\n};\n\nconst ollamaResp = $input.first().json;\nconst parsed = $('Route Event').first().json;\n\nconst content = ollamaResp.message?.content || 'No response.';\nconst MAX = 2800;\nconst formatted = mdToMrkdwn(content);\nconst truncated = formatted.length > MAX\n  ? formatted.slice(0, MAX) + '\\n_[truncated \u2014 use /ai for full response]_'\n  : formatted;\n\nconst emoji = AGENT_EMOJI[parsed.agent] || ':robot_face:';\nconst blocks = [];\n\nif (parsed.isTask) {\n  blocks.push({\n    type: 'header',\n    text: { type: 'plain_text', text: ':white_check_mark: ' + parsed.agent + ' \u2014 task complete', emoji: true }\n  });\n  if (parsed.taskTitle) {\n    blocks.push({\n      type: 'context',\n      elements: [{ type: 'mrkdwn', text: '_' + parsed.taskTitle.slice(0, 100) + '_' }]\n    });\n  }\n} else {\n  blocks.push({\n    type: 'header',\n    text: { type: 'plain_text', text: emoji + ' ' + parsed.agent, emoji: true }\n  });\n  blocks.push({\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: 'responding to <@' + parsed.userId + '>' }]\n  });\n}\n\nblocks.push({ type: 'divider' });\nblocks.push({ type: 'section', text: { type: 'mrkdwn', text: truncated } });\nblocks.push({\n  type: 'context',\n  elements: [{ type: 'mrkdwn', text: '_model: ' + (parsed.model || parsed.agent + ':latest') + '_' }]\n});\n\nreturn [{ json: {\n  channelId: parsed.channelId,\n  thread_ts: parsed.ts,\n  payload: JSON.stringify({\n    channel: parsed.channelId,\n    thread_ts: parsed.ts,\n    blocks\n  })\n}}];\n"
       },
       "id": "node-format",
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1300, 300]
+      "position": [
+        1300,
+        300
+      ]
     },
     {
       "parameters": {
@@ -143,7 +167,10 @@
       "name": "Post Response",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1520, 300]
+      "position": [
+        1520,
+        300
+      ]
     }
   ],
   "connections": {
