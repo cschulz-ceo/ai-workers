@@ -1,0 +1,110 @@
+{
+  "name": "Slack: Monitoring Alert Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "monitoring-alert",
+        "options": {
+          "responseMode": "lastNode"
+        }
+      },
+      "id": "webhook-alert",
+      "name": "Monitoring Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "monitoring-alert"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Normalize alert from Netdata, Portainer, or Uptime Kuma ────────\n// Each monitoring tool sends a different payload format.\n// This node normalizes them into a common structure.\n\nconst body = $input.first().json.body || $input.first().json;\n\nlet source   = 'unknown';\nlet title    = 'Monitoring Alert';\nlet message  = 'No details provided.';\nlet severity = 'warning';  // 'critical' | 'warning' | 'info' | 'resolved'\nlet service  = 'unknown';\n\n// ── Uptime Kuma ──────────────────────────────────────────────────────\n// Uptime Kuma payload fields: monitorName, status, msg, heartbeat\nif (body.monitorName || body.heartbeat) {\n  source  = 'Uptime Kuma';\n  service = body.monitorName || 'unknown service';\n  const isUp = body.heartbeat?.status === 1 || body.status === 'up';\n  severity = isUp ? 'resolved' : 'critical';\n  title    = `${service} is ${isUp ? 'UP' : 'DOWN'}`;\n  message  = body.msg || (isUp ? 'Service recovered.' : 'Service unreachable.');\n}\n\n// ── Netdata ──────────────────────────────────────────────────────────\n// Netdata webhook payload fields: alarm, status, info, chart\nelse if (body.alarm || body.chart) {\n  source   = 'Netdata';\n  service  = body.chart || body.alarm || 'system';\n  const netStatus = (body.status || '').toUpperCase();\n  severity = netStatus === 'CRITICAL' ? 'critical'\n           : netStatus === 'WARNING'  ? 'warning'\n           : netStatus === 'CLEAR'    ? 'resolved'\n           : 'info';\n  title   = `Netdata: ${body.alarm || 'Alert'} — ${netStatus}`;\n  message = body.info || `${service}: ${netStatus}`;\n}\n\n// ── Portainer ────────────────────────────────────────────────────────\n// Portainer webhook body varies; often has container name + event type\nelse if (body.container || body.event) {\n  source  = 'Portainer';\n  service = body.container?.Names?.[0]?.replace('/', '') || body.container || 'container';\n  const event = (body.event || body.status || 'event').toLowerCase();\n  severity = ['die', 'kill', 'oom'].includes(event) ? 'critical'\n           : event === 'start' ? 'resolved'\n           : 'warning';\n  title   = `Container ${service}: ${event}`;\n  message = `Event: ${event} on ${service}`;\n}\n\n// ── Generic fallback ─────────────────────────────────────────────────\nelse {\n  title   = body.title   || body.summary || 'Monitoring Alert';\n  message = body.message || body.body    || JSON.stringify(body).substring(0, 500);\n  source  = body.source  || 'monitoring';\n  severity = body.severity || body.level || 'warning';\n}\n\nconst severityEmoji = {\n  critical : ':red_circle:',\n  warning  : ':large_yellow_circle:',\n  info     : ':large_blue_circle:',\n  resolved : ':large_green_circle:'\n}[severity] || ':grey_question:';\n\nreturn [{\n  json: { source, title, message, severity, service, severityEmoji }\n}];"
+      },
+      "id": "normalize-alert",
+      "name": "Normalize Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.severity }}",
+              "operation": "equals",
+              "value2": "resolved"
+            }
+          ]
+        }
+      },
+      "id": "is-resolved",
+      "name": "Is Resolved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_INCOMING_WEBHOOK_URL }}",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": { \"type\": \"plain_text\", \"text\": \"{{ $json.severityEmoji }}  {{ $json.title }}\", \"emoji\": true }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        { \"type\": \"mrkdwn\", \"text\": \"*Source:*\\n{{ $json.source }}\" },\n        { \"type\": \"mrkdwn\", \"text\": \"*Service:*\\n{{ $json.service }}\" },\n        { \"type\": \"mrkdwn\", \"text\": \"*Severity:*\\n{{ $json.severity.toUpperCase() }}\" }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": { \"type\": \"mrkdwn\", \"text\": \"*Details:*\\n{{ $json.message }}\" }\n    },\n    {\n      \"type\": \"context\",\n      \"elements\": [{ \"type\": \"mrkdwn\", \"text\": \"ai-workers monitoring  ·  <!date^{{ Math.floor(Date.now()/1000) }}^{date_short_pretty} at {time}|now>\" }]\n    }\n  ]\n}"
+      },
+      "id": "post-alert",
+      "name": "Post Alert to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_INCOMING_WEBHOOK_URL }}",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": { \"type\": \"mrkdwn\", \"text\": \":large_green_circle:  *RESOLVED:* {{ $json.title }}\\n{{ $json.message }}\" }\n    },\n    {\n      \"type\": \"context\",\n      \"elements\": [{ \"type\": \"mrkdwn\", \"text\": \"{{ $json.source }}  ·  {{ $json.service }}  ·  <!date^{{ Math.floor(Date.now()/1000) }}^{time}|now>\" }]\n    }\n  ]\n}"
+      },
+      "id": "post-resolved",
+      "name": "Post Resolved to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"received\"}"
+      },
+      "id": "ack-webhook",
+      "name": "ACK Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1100, 300]
+    }
+  ],
+  "connections": {
+    "Monitoring Webhook": {
+      "main": [[{ "node": "Normalize Alert", "type": "main", "index": 0 }]]
+    },
+    "Normalize Alert": {
+      "main": [[{ "node": "Is Resolved?", "type": "main", "index": 0 }]]
+    },
+    "Is Resolved?": {
+      "main": [
+        [{ "node": "Post Resolved to Slack", "type": "main", "index": 0 }],
+        [{ "node": "Post Alert to Slack", "type": "main", "index": 0 }]
+      ]
+    },
+    "Post Alert to Slack":   { "main": [[{ "node": "ACK Webhook", "type": "main", "index": 0 }]] },
+    "Post Resolved to Slack": { "main": [[{ "node": "ACK Webhook", "type": "main", "index": 0 }]] }
+  },
+  "meta": {
+    "description": "Receives monitoring alerts from Netdata, Portainer, and Uptime Kuma. Normalizes payloads into a common format, routes to alert vs resolved formatting, and posts to Slack via Incoming Webhook. Webhook path: /webhook/monitoring-alert",
+    "tags": ["slack", "monitoring", "alerts", "netdata", "portainer", "uptime-kuma"]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
