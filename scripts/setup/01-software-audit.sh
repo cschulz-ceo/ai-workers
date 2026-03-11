@@ -121,7 +121,7 @@ fi
 # ── Docker Compose File Audits ────────────────────────────────────────────────
 header "Docker Compose Files & Orphan Detection"
 
-COMPOSE_DIRS=("$HOME/n8n" "$HOME/open-webui" "$HOME/plane-data" "$HOME/backups" "$HOME/biulatech")
+COMPOSE_DIRS=("$HOME/n8n" "$HOME/open-webui" "$HOME/plane-data" "$HOME/backups")
 
 for dir in "${COMPOSE_DIRS[@]}"; do
     if [[ -d "$dir" ]]; then
@@ -178,7 +178,7 @@ if [[ -d "$N8N_DIR" ]]; then
             WEBHOOK_VAL=$(grep "WEBHOOK_URL" "$N8N_DIR/docker-compose.yml" | grep -v "#" | head -1 | cut -d= -f2- | xargs)
             if echo "$WEBHOOK_VAL" | grep -qiE "localhost|127\.0\.0\.1"; then
                 warn "WEBHOOK_URL is set to localhost (${WEBHOOK_VAL})"
-                info "For Slack inbound webhooks, update to your cloudflared tunnel URL."
+                info "For Slack inbound webhooks, update to your ngrok tunnel URL."
                 info "See: scripts/setup/04-slack-tunnel-setup.sh"
             fi
         fi

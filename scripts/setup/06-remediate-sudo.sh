@@ -22,7 +22,7 @@ if [[ "$EUID" -ne 0 ]]; then
     exit 1
 fi
 
-REAL_USER="${SUDO_USER:-biulatech}"
+REAL_USER="${SUDO_USER:-$(logname 2>/dev/null || whoami)}"
 REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
 
 CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'

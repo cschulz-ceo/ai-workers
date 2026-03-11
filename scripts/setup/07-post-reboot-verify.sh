@@ -97,14 +97,14 @@ else
     fail "Ollama not running. Start: systemctl start ollama  OR  ollama serve"
 fi
 
-# cloudflared (if set up)
-if systemctl --user is-active cloudflared-n8n &>/dev/null 2>&1; then
-    pass "cloudflared tunnel service active"
-elif pgrep -x cloudflared &>/dev/null 2>&1; then
-    pass "cloudflared running (process)"
+# ngrok tunnel (if set up)
+if systemctl --user is-active ngrok-n8n &>/dev/null 2>&1; then
+    pass "ngrok tunnel service active"
+elif pgrep -x ngrok &>/dev/null 2>&1; then
+    pass "ngrok running (process)"
 else
-    warn "cloudflared not running. Slack inbound webhooks won't work."
-    info "Start: systemctl --user start cloudflared-n8n"
+    warn "ngrok not running. Slack inbound webhooks won't work."
+    info "Start: systemctl --user start ngrok-n8n"
     info "Setup: bash ~/ai-workers/scripts/setup/04-slack-tunnel-setup.sh"
 fi
 

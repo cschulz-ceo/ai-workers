@@ -183,7 +183,7 @@ find ~ -maxdepth 3 -name "*.bak*" -name "*.yml" -exec ls -lh {} \;
 \`\`\`
 
 ### n8n WEBHOOK_URL for Slack Integration
-Update \`~/n8n/docker-compose.yml\` after running cloudflared setup:
+Update \`~/n8n/docker-compose.yml\` after running ngrok tunnel setup:
 \`\`\`yaml
 environment:
   - WEBHOOK_URL=https://YOUR-TUNNEL.trycloudflare.com/

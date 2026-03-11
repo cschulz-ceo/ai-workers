@@ -107,7 +107,7 @@ Slash commands let you type `/ai-status` or `/run-agent Jason` in Slack and trig
 3. Configure:
    - **Command**: `/ai` (or `/agent`, your choice)
    - **Request URL**: `https://YOUR-TUNNEL-URL/webhook/slack-command`
-     *(replace with your actual cloudflared tunnel URL)*
+     *(replace with your actual ngrok tunnel URL)*
    - **Short Description**: `Trigger AI agent tasks`
    - **Usage Hint**: `[task description]`
 4. Click **Save**

@@ -1,28 +1,32 @@
 #!/usr/bin/env bash
 # =============================================================================
 # 04-slack-tunnel-setup.sh
-# Sets up a Cloudflare Tunnel (cloudflared) to expose n8n's webhook endpoint
-# to the public internet — enabling Slack to send events, slash commands, and
-# interactive payloads to your local n8n instance.
+# Sets up an ngrok tunnel to expose n8n's webhook endpoint to the internet,
+# enabling Slack to send events, slash commands, and payloads to local n8n.
 #
 # Architecture:
-#   Slack → cloudflared tunnel → local n8n :5678
-#   n8n → Slack Incoming Webhook (no tunnel needed, outbound only)
+#   Slack → ngrok tunnel → local n8n :5678
+#   n8n → Slack Incoming Webhook (outbound only — no tunnel needed)
 #
 # What this script does:
-#   1. Downloads and installs cloudflared (no sudo needed — user-local install)
-#   2. Creates a persistent named tunnel (stays stable across restarts)
-#   3. Generates tunnel config with n8n as the backend service
-#   4. Creates a systemd user service for auto-start
+#   1. Downloads and installs ngrok (no sudo needed — user-local install)
+#   2. Configures authtoken from NGROK_AUTHTOKEN env var or ~/n8n/.env
+#   3. Optionally configures a static domain (free account gives you one)
+#   4. Creates a systemd user service for auto-start on login
 #   5. Writes the tunnel URL to ~/ai-workers/configs/network/tunnel-url.txt
 #   6. Prints instructions to update n8n WEBHOOK_URL
 #
 # Prerequisites:
-#   - n8n must be running (docker compose up in ~/n8n/)
-#   - A Cloudflare account (free tier at cloudflare.com)
-#   - After running, follow prompts to authenticate with Cloudflare
+#   - Free ngrok account at https://dashboard.ngrok.com/signup
+#   - Your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken
+#   - n8n should be running (docker compose up in ~/n8n/) before starting tunnel
 #
-# Usage: bash scripts/setup/04-slack-tunnel-setup.sh
+# Usage:
+#   NGROK_AUTHTOKEN=<your_token> bash scripts/setup/04-slack-tunnel-setup.sh
+#   -- or --
+#   Add NGROK_AUTHTOKEN=<token> to ~/n8n/.env, then run without env var
+#   -- or --
+#   bash scripts/setup/04-slack-tunnel-setup.sh   (will prompt for token)
 # =============================================================================
 
 set -euo pipefail
@@ -36,51 +40,53 @@ fail()  { echo -e "  ${RED}[FAIL]${RESET} $1"; }
 warn()  { echo -e "  ${YELLOW}[WARN]${RESET} $1"; }
 step()  { echo -e "\n${BOLD}${CYAN}── $1 ──${RESET}"; }
 
-TUNNEL_NAME="ai-workers-n8n"
 N8N_PORT=5678
-CLOUDFLARED_BIN="$HOME/.local/bin/cloudflared"
-TUNNEL_CONFIG_DIR="$HOME/.cloudflared"
+NGROK_BIN="$HOME/.local/bin/ngrok"
+NGROK_CONFIG_DIR="$HOME/.config/ngrok"
 TUNNEL_URL_FILE="$HOME/ai-workers/configs/network/tunnel-url.txt"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+N8N_ENV_FILE="$HOME/n8n/.env"
 
 echo -e "${BOLD}${CYAN}"
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║     ai-workers  ·  Cloudflare Tunnel Setup for n8n        ║"
+echo "║        ai-workers  ·  ngrok Tunnel Setup for n8n          ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
 
 # ── Step 1: Check prerequisites ───────────────────────────────────────────────
 step "1. Prerequisites"
 
-# Check n8n is reachable
 if curl -s --max-time 3 "http://localhost:${N8N_PORT}/healthz" &>/dev/null; then
     pass "n8n is responding on port ${N8N_PORT}"
 elif ss -tlnp 2>/dev/null | grep -q ":${N8N_PORT}"; then
     pass "Port ${N8N_PORT} is listening (n8n may still be starting)"
 else
     warn "n8n does not appear to be running on port ${N8N_PORT}."
-    warn "The tunnel will be created but won't route traffic until n8n starts."
-    info "Start n8n: cd ~/n8n && docker compose up -d"
+    warn "Start n8n first: cd ~/n8n && docker compose up -d"
+    warn "Continuing anyway — tunnel will be created but won't route until n8n starts."
 fi
 
-# ── Step 2: Install cloudflared ───────────────────────────────────────────────
-step "2. Installing cloudflared"
+# ── Step 2: Install ngrok ─────────────────────────────────────────────────────
+step "2. Installing ngrok"
 
 mkdir -p "$HOME/.local/bin"
 
-if [[ -f "$CLOUDFLARED_BIN" ]]; then
-    CURRENT_VER=$("$CLOUDFLARED_BIN" --version 2>/dev/null | awk '{print $3}' || echo "unknown")
-    pass "cloudflared already installed (${CURRENT_VER})"
-    info "To update: re-run this script or download from https://github.com/cloudflare/cloudflared/releases"
+if [[ -f "$NGROK_BIN" ]]; then
+    CURRENT_VER=$("$NGROK_BIN" version 2>/dev/null | head -1 || echo "unknown")
+    pass "ngrok already installed: ${CURRENT_VER}"
 else
-    info "Downloading cloudflared for linux/amd64..."
-    LATEST_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
-    if curl -fsSL --progress-bar "$LATEST_URL" -o "$CLOUDFLARED_BIN"; then
-        chmod +x "$CLOUDFLARED_BIN"
-        VER=$("$CLOUDFLARED_BIN" --version 2>/dev/null | awk '{print $3}' || echo "installed")
-        pass "cloudflared installed: ${CLOUDFLARED_BIN} (${VER})"
+    info "Downloading ngrok for linux/amd64..."
+    NGROK_URL="https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz"
+    TMP_DIR=$(mktemp -d)
+    if curl -fsSL --progress-bar "$NGROK_URL" | tar xz -C "$TMP_DIR"; then
+        mv "$TMP_DIR/ngrok" "$NGROK_BIN"
+        chmod +x "$NGROK_BIN"
+        rm -rf "$TMP_DIR"
+        VER=$("$NGROK_BIN" version 2>/dev/null | head -1 || echo "installed")
+        pass "ngrok installed: ${NGROK_BIN} (${VER})"
     else
-        fail "Failed to download cloudflared. Check internet connection."
+        fail "Failed to download ngrok. Check internet connection."
+        fail "Manual install: https://ngrok.com/download"
         exit 1
     fi
 fi
@@ -88,178 +94,171 @@ fi
 # Ensure ~/.local/bin is on PATH
 if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
     warn "~/.local/bin is not in your PATH."
-    info "Add to ~/.bashrc or ~/.profile:"
-    info '  export PATH="$HOME/.local/bin:$PATH"'
+    info "Add to ~/.bashrc: export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
 
-# ── Step 3: Authenticate with Cloudflare ──────────────────────────────────────
-step "3. Cloudflare Authentication"
+# ── Step 3: Configure authtoken ───────────────────────────────────────────────
+step "3. ngrok Authtoken"
 
-CERT_FILE="$TUNNEL_CONFIG_DIR/cert.pem"
-if [[ -f "$CERT_FILE" ]]; then
-    pass "Cloudflare credentials found at ${CERT_FILE}"
-else
-    echo ""
-    echo -e "  ${BOLD}You need to authenticate cloudflared with your Cloudflare account.${RESET}"
-    echo ""
-    echo "  This will open a browser window to authorize the tunnel."
-    echo "  If running headlessly, copy the URL shown and open it on another device."
-    echo ""
-    read -rp "  Press ENTER to start authentication (or Ctrl+C to cancel)..." _
+# Source authtoken from environment, n8n .env file, or existing ngrok config
+AUTHTOKEN="${NGROK_AUTHTOKEN:-}"
 
-    "$CLOUDFLARED_BIN" tunnel login
+if [[ -z "$AUTHTOKEN" ]] && [[ -f "$N8N_ENV_FILE" ]]; then
+    AUTHTOKEN=$(grep -E "^NGROK_AUTHTOKEN=" "$N8N_ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+fi
 
-    if [[ -f "$CERT_FILE" ]]; then
-        pass "Authentication successful. Credentials saved."
-    else
-        fail "Authentication failed or was cancelled. Re-run this script to try again."
+if [[ -z "$AUTHTOKEN" ]]; then
+    # Check if ngrok already has a config with a token
+    if "$NGROK_BIN" config check &>/dev/null 2>&1; then
+        pass "ngrok config already present — assuming token is configured"
+        AUTHTOKEN="already_configured"
+    fi
+fi
+
+if [[ -z "$AUTHTOKEN" ]]; then
+    echo ""
+    echo -e "  ${BOLD}No authtoken found. Get yours from:${RESET}"
+    echo "  https://dashboard.ngrok.com/get-started/your-authtoken"
+    echo ""
+    read -rsp "  Paste your ngrok authtoken (input hidden): " AUTHTOKEN
+    echo ""
+    if [[ -z "$AUTHTOKEN" ]]; then
+        fail "No authtoken provided. Re-run with NGROK_AUTHTOKEN=<token> or paste when prompted."
         exit 1
     fi
 fi
 
-# ── Step 4: Create the tunnel ─────────────────────────────────────────────────
-step "4. Creating Named Tunnel: ${TUNNEL_NAME}"
+if [[ "$AUTHTOKEN" != "already_configured" ]]; then
+    "$NGROK_BIN" config add-authtoken "$AUTHTOKEN" 2>&1
+    pass "ngrok authtoken configured"
 
-# Check if tunnel already exists
-if "$CLOUDFLARED_BIN" tunnel list 2>/dev/null | grep -q "$TUNNEL_NAME"; then
-    pass "Tunnel '${TUNNEL_NAME}' already exists"
-    TUNNEL_ID=$("$CLOUDFLARED_BIN" tunnel list 2>/dev/null | grep "$TUNNEL_NAME" | awk '{print $1}')
-    info "Tunnel ID: ${TUNNEL_ID}"
-else
-    info "Creating tunnel '${TUNNEL_NAME}'..."
-    "$CLOUDFLARED_BIN" tunnel create "$TUNNEL_NAME" 2>&1
-    TUNNEL_ID=$("$CLOUDFLARED_BIN" tunnel list 2>/dev/null | grep "$TUNNEL_NAME" | awk '{print $1}')
-    if [[ -n "$TUNNEL_ID" ]]; then
-        pass "Tunnel created. ID: ${TUNNEL_ID}"
-    else
-        fail "Tunnel creation failed."
-        exit 1
+    # Save to n8n .env for future runs (if file exists)
+    if [[ -f "$N8N_ENV_FILE" ]]; then
+        if grep -q "^NGROK_AUTHTOKEN=" "$N8N_ENV_FILE"; then
+            sed -i "s|^NGROK_AUTHTOKEN=.*|NGROK_AUTHTOKEN=${AUTHTOKEN}|" "$N8N_ENV_FILE"
+        else
+            echo "NGROK_AUTHTOKEN=${AUTHTOKEN}" >> "$N8N_ENV_FILE"
+        fi
+        pass "Authtoken saved to ${N8N_ENV_FILE}"
     fi
 fi
 
-# ── Step 5: Write tunnel config ───────────────────────────────────────────────
-step "5. Writing Tunnel Config"
+# ── Step 4: Static domain (recommended) ──────────────────────────────────────
+step "4. Static Domain Configuration"
 
-TUNNEL_CRED_FILE="$TUNNEL_CONFIG_DIR/${TUNNEL_ID}.json"
-TUNNEL_CONFIG_FILE="$TUNNEL_CONFIG_DIR/config.yml"
+STATIC_DOMAIN="${NGROK_STATIC_DOMAIN:-}"
 
-if [[ ! -f "$TUNNEL_CRED_FILE" ]]; then
-    fail "Tunnel credential file not found: ${TUNNEL_CRED_FILE}"
-    info "Try re-running: cloudflared tunnel create ${TUNNEL_NAME}"
-    exit 1
+if [[ -z "$STATIC_DOMAIN" ]] && [[ -f "$N8N_ENV_FILE" ]]; then
+    STATIC_DOMAIN=$(grep -E "^NGROK_STATIC_DOMAIN=" "$N8N_ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 fi
 
-cat > "$TUNNEL_CONFIG_FILE" << EOF
-tunnel: ${TUNNEL_ID}
-credentials-file: ${TUNNEL_CRED_FILE}
+if [[ -z "$STATIC_DOMAIN" ]]; then
+    echo ""
+    echo -e "  ${BOLD}Optional: Static domain (free account includes one)${RESET}"
+    echo "  Find yours at: https://dashboard.ngrok.com/cloud-edge/domains"
+    echo "  It looks like: abc123xyz.ngrok-free.app"
+    echo "  (Press ENTER to skip and use a dynamic URL instead)"
+    echo ""
+    read -rp "  Your static domain (or press ENTER to skip): " STATIC_DOMAIN
+fi
 
-ingress:
-  # n8n webhook endpoint — receives Slack events, slash commands, payloads
-  - hostname: ${TUNNEL_NAME}.${TUNNEL_ID:0:8}.workers.dev
-    service: http://localhost:${N8N_PORT}
+if [[ -n "$STATIC_DOMAIN" ]]; then
+    pass "Static domain configured: ${STATIC_DOMAIN}"
+    TUNNEL_URL="https://${STATIC_DOMAIN}"
 
-  # Catch-all (required by cloudflared)
-  - service: http_status:404
-EOF
+    # Save to n8n .env
+    if [[ -f "$N8N_ENV_FILE" ]]; then
+        if grep -q "^NGROK_STATIC_DOMAIN=" "$N8N_ENV_FILE"; then
+            sed -i "s|^NGROK_STATIC_DOMAIN=.*|NGROK_STATIC_DOMAIN=${STATIC_DOMAIN}|" "$N8N_ENV_FILE"
+        else
+            echo "NGROK_STATIC_DOMAIN=${STATIC_DOMAIN}" >> "$N8N_ENV_FILE"
+        fi
+        # Also update WEBHOOK_URL
+        if grep -q "^WEBHOOK_URL=" "$N8N_ENV_FILE"; then
+            sed -i "s|^WEBHOOK_URL=.*|WEBHOOK_URL=${TUNNEL_URL}/|" "$N8N_ENV_FILE"
+            pass "WEBHOOK_URL updated in ${N8N_ENV_FILE}"
+        fi
+    fi
 
-pass "Tunnel config written to ${TUNNEL_CONFIG_FILE}"
+    NGROK_START_ARGS="http --domain=${STATIC_DOMAIN} ${N8N_PORT}"
+else
+    warn "No static domain set. URL will change on every restart."
+    warn "After starting, update WEBHOOK_URL in ~/n8n/.env and restart n8n."
+    TUNNEL_URL="https://DYNAMIC-URL-SEE-NGROK-OUTPUT"
+    NGROK_START_ARGS="http ${N8N_PORT}"
+fi
 
-# ── Step 6: Get the tunnel URL ────────────────────────────────────────────────
-step "6. Tunnel URL"
-
-# Named tunnels use the pattern: <name>.cfargotunnel.com or custom domain
-# For quick-tunnel (no account), use: cloudflared tunnel --url http://localhost:5678
-# Named tunnels need a DNS record. Offer both approaches.
-
-echo ""
-echo -e "  ${BOLD}Two tunnel options:${RESET}"
-echo ""
-echo -e "  ${BOLD}Option A: Named tunnel (persistent URL, recommended)${RESET}"
-echo "  Requires adding a CNAME DNS record in your Cloudflare dashboard."
-echo "  Your tunnel ID: ${TUNNEL_ID}"
-echo ""
-echo "  To create the DNS route:"
-echo "    $CLOUDFLARED_BIN tunnel route dns ${TUNNEL_NAME} n8n.yourdomain.com"
-echo "  Then your n8n will be at: https://n8n.yourdomain.com"
-echo ""
-echo -e "  ${BOLD}Option B: Quick tunnel (temporary URL, good for testing)${RESET}"
-echo "  No account or DNS needed — URL changes on each restart."
-echo "  Start with: $CLOUDFLARED_BIN tunnel --url http://localhost:${N8N_PORT}"
-echo "  The URL will be printed in the output."
-echo ""
-info "For Slack integration, a persistent URL (Option A or a static quick-tunnel) is strongly recommended."
-
-# ── Step 7: Systemd user service ──────────────────────────────────────────────
-step "7. Creating systemd User Service"
+# ── Step 5: Write systemd user service ────────────────────────────────────────
+step "5. Creating systemd User Service"
 
 mkdir -p "$SYSTEMD_USER_DIR"
 
-cat > "${SYSTEMD_USER_DIR}/cloudflared-n8n.service" << EOF
+cat > "${SYSTEMD_USER_DIR}/ngrok-n8n.service" << EOF
 [Unit]
-Description=Cloudflare Tunnel for n8n (ai-workers)
+Description=ngrok Tunnel for n8n (ai-workers)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${CLOUDFLARED_BIN} tunnel --config ${TUNNEL_CONFIG_FILE} run ${TUNNEL_NAME}
+ExecStart=${NGROK_BIN} ${NGROK_START_ARGS} --log=stdout
 Restart=on-failure
-RestartSec=5s
-# Logging
+RestartSec=10s
 StandardOutput=journal
 StandardError=journal
+# Environment (ngrok reads token from ~/.config/ngrok/ngrok.yml)
+Environment=HOME=${HOME}
 
 [Install]
 WantedBy=default.target
 EOF
 
-pass "Systemd user service created: ${SYSTEMD_USER_DIR}/cloudflared-n8n.service"
+pass "systemd user service created: ${SYSTEMD_USER_DIR}/ngrok-n8n.service"
 info "Enable and start:"
 info "  systemctl --user daemon-reload"
-info "  systemctl --user enable --now cloudflared-n8n"
-info "  systemctl --user status cloudflared-n8n"
-info "  journalctl --user -u cloudflared-n8n -f"
+info "  systemctl --user enable --now ngrok-n8n"
+info "  systemctl --user status ngrok-n8n"
+info "  journalctl --user -u ngrok-n8n -f"
 
-# Enable lingering so user services start at boot (not just on login)
+# Enable lingering so service starts at boot, not just on login
 if loginctl show-user "$USER" 2>/dev/null | grep -q "Linger=yes"; then
     pass "User lingering already enabled (service will start at boot)"
 else
-    info "Enable user service boot persistence:"
-    info "  loginctl enable-linger ${USER}"
+    info "Enable boot persistence (requires sudo):"
+    info "  sudo loginctl enable-linger ${USER}"
 fi
 
-# ── Step 8: Update n8n docker-compose ─────────────────────────────────────────
-step "8. n8n WEBHOOK_URL Update Required"
+# ── Step 6: Write tunnel URL file ─────────────────────────────────────────────
+step "6. Tunnel URL File"
 
-N8N_COMPOSE="$HOME/n8n/docker-compose.yml"
-echo ""
-echo -e "  ${BOLD}${YELLOW}ACTION REQUIRED:${RESET}"
-echo "  After the tunnel is running and you have your public URL, update:"
-echo ""
-echo "    File: ${N8N_COMPOSE}"
-echo ""
-echo "    Change:  - WEBHOOK_URL=http://localhost:5678/"
-echo "    To:      - WEBHOOK_URL=https://YOUR-TUNNEL-URL/"
-echo ""
-echo "  Then restart n8n:"
-echo "    cd ~/n8n && docker compose down && docker compose up -d"
-echo ""
-
-# Save placeholder URL file
 mkdir -p "$(dirname "$TUNNEL_URL_FILE")"
 cat > "$TUNNEL_URL_FILE" << EOF
-# Cloudflare Tunnel URL for n8n
-# Update this file after tunnel is running and URL is confirmed.
-# This file is gitignored (no secrets, but avoids committing env-specific URLs).
+# ngrok Tunnel URL for n8n (ai-workers)
+# Update WEBHOOK_URL below after tunnel is confirmed running.
+# This file is gitignored — do not commit.
 #
-# Tunnel Name: ${TUNNEL_NAME}
-# Tunnel ID:   ${TUNNEL_ID}
+# Static domain: ${STATIC_DOMAIN:-none configured — dynamic URL}
 #
-# WEBHOOK_URL (update in ~/n8n/docker-compose.yml):
-WEBHOOK_URL=https://REPLACE-WITH-YOUR-TUNNEL-URL/
+# WEBHOOK_URL (update in ~/n8n/.env):
+WEBHOOK_URL=${TUNNEL_URL}/
 EOF
 
-pass "Tunnel URL placeholder written to: ${TUNNEL_URL_FILE}"
+pass "Tunnel URL file written to: ${TUNNEL_URL_FILE}"
+
+# ── Step 7: Quick-start option ────────────────────────────────────────────────
+step "7. Quick Start (foreground test)"
+
+echo ""
+echo -e "  To test the tunnel interactively (Ctrl+C to stop):"
+echo ""
+if [[ -n "$STATIC_DOMAIN" ]]; then
+    echo "    ${NGROK_BIN} http --domain=${STATIC_DOMAIN} ${N8N_PORT}"
+else
+    echo "    ${NGROK_BIN} http ${N8N_PORT}"
+fi
+echo ""
+echo -e "  ${BOLD}ngrok web inspector (local):${RESET}  http://127.0.0.1:4040"
+echo ""
 
 # ── Next steps summary ────────────────────────────────────────────────────────
 echo ""
@@ -267,17 +266,24 @@ echo -e "${BOLD}${CYAN}══ Next Steps ══${RESET}"
 echo ""
 echo "  1. Enable tunnel service:"
 echo "     systemctl --user daemon-reload"
-echo "     systemctl --user enable --now cloudflared-n8n"
+echo "     systemctl --user enable --now ngrok-n8n"
 echo ""
-echo "  2. Get your tunnel URL:"
-echo "     Option A: cloudflared tunnel route dns ${TUNNEL_NAME} n8n.yourdomain.com"
-echo "     Option B: cloudflared tunnel --url http://localhost:${N8N_PORT}  (temporary)"
+echo "  2. Confirm tunnel is running:"
+echo "     curl http://127.0.0.1:4040/api/tunnels | python3 -m json.tool"
 echo ""
-echo "  3. Update ~/n8n/docker-compose.yml WEBHOOK_URL → your tunnel URL"
-echo "     Then: cd ~/n8n && docker compose down && docker compose up -d"
-echo ""
+if [[ -z "$STATIC_DOMAIN" ]]; then
+    echo "  3. Copy the Forwarding URL from ngrok output"
+    echo "     Update WEBHOOK_URL in ~/n8n/.env → restart n8n"
+    echo "     cd ~/n8n && docker compose down && docker compose up -d"
+    echo ""
+else
+    echo "  3. WEBHOOK_URL already set to: ${TUNNEL_URL}/"
+    echo "     Restart n8n to apply: cd ~/n8n && docker compose down && docker compose up -d"
+    echo ""
+fi
 echo "  4. Create your Slack App:"
 echo "     See: services/n8n/slack-app-setup.md"
 echo ""
-echo "  5. Test with: curl https://YOUR-TUNNEL-URL/healthz"
+echo "  5. Test end-to-end:"
+echo "     curl ${TUNNEL_URL}/healthz"
 echo ""

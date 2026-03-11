@@ -175,9 +175,33 @@ Self-host Plane (open-source project management) via Docker stack, integrated wi
 
 ---
 
+## ADR-010: ngrok for Slack Webhook Tunnel
+
+**Status:** Accepted
+
+**Context:**
+n8n runs locally and must receive inbound HTTP requests from Slack (slash commands, events, interactive payloads). Cloudflare Tunnel was the original choice but requires either a registered domain or a payment method on file even for zero-cost plans — neither of which was available at bootstrap time.
+
+**Decision:**
+Use ngrok (free tier) to expose n8n's webhook endpoint publicly.
+
+**Rationale:**
+- Free tier includes one static subdomain (e.g., `abc.ngrok-free.app`) that persists across restarts — required for stable Slack app configuration
+- No domain required, no payment required
+- CLI install with no system dependencies
+- Built-in web inspector at `localhost:4040` for debugging webhook payloads
+- Runs as a systemd user service (auto-start on login, no sudo needed)
+- If biulatech.com is added to Cloudflare in future, migration to Cloudflare Tunnel is straightforward
+
+**Trade-offs:**
+- Free tier limits: 1 static domain, 40 connections/minute — sufficient for this workload
+- ngrok account required (free); authtoken stored in `~/n8n/.env` (gitignored)
+- Cloudflare Tunnel remains the long-term preference once a domain is registered
+
 ## Future Decisions (Pending)
 
-- [ ] ADR-010: Secrets management strategy (e.g., local Vault vs. env files)
-- [ ] ADR-011: Model selection strategy beyond llama3.1 (quantization, specialization)
-- [ ] ADR-012: ComfyUI workflow versioning approach
-- [ ] ADR-013: Agent skill packaging format
+- [ ] ADR-011: Secrets management strategy (e.g., local Vault vs. env files)
+- [ ] ADR-012: Model selection strategy beyond llama3.1 (quantization, specialization)
+- [ ] ADR-013: ComfyUI workflow versioning approach
+- [ ] ADR-014: Agent skill packaging format
+- [ ] ADR-015: Migrate tunnel to Cloudflare (when biulatech.com is added to Cloudflare)
