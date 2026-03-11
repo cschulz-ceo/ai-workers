@@ -44,3 +44,4 @@ build/
 # Docker volumes (local bind mounts - not tracked)
 data/
 volumes/
+configs/network/tunnel-url.txt

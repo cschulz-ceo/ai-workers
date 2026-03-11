@@ -204,4 +204,6 @@ Use ngrok (free tier) to expose n8n's webhook endpoint publicly.
 - [ ] ADR-012: Model selection strategy beyond llama3.1 (quantization, specialization)
 - [ ] ADR-013: ComfyUI workflow versioning approach
 - [ ] ADR-014: Agent skill packaging format
-- [ ] ADR-015: Migrate tunnel to Cloudflare (when biulatech.com is added to Cloudflare)
+- [ ] ADR-015: Migrate tunnel to Cloudflare (biulatech.com is registered via Wix — migration
+        path is Cloudflare partial/CNAME setup for n8n.biulatech.com without moving Wix
+        nameservers, OR migrate Wix site off Wix first for full Cloudflare DNS control)
