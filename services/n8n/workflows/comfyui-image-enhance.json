@@ -1,0 +1,330 @@
+{
+  "id": "comfyui-enh-001",
+  "name": "ComfyUI Image Enhance",
+  "active": false,
+  "nodes": [
+    {
+      "id": "e-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "comfyui-enhance",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "comfyui-enhance-wh"
+    },
+    {
+      "id": "e-ack-wh",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        180
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ok:true}) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "e-ack-slack",
+      "name": "Ack Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        200,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ channel: $json.body.channel_id || 'C0AKW7W9ZPX', text: ':sparkles: *Enhancing image 4x...*\\nThis takes about 30 seconds.' }) }}"
+      }
+    },
+    {
+      "id": "e-download-src",
+      "name": "Download Source Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        440,
+        420
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Webhook').first().json.body.image_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "e-upload-src",
+      "name": "Upload to ComfyUI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        680,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8188/upload/image",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image",
+              "parameterType": "formBinaryData",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "type",
+              "value": "input"
+            },
+            {
+              "name": "overwrite",
+              "value": "true"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e-build",
+      "name": "Build Enhance Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        420
+      ],
+      "parameters": {
+        "jsCode": "\nconst raw      = $('Webhook').first().json.body || {};\nconst filename = $input.first().json.name;\nconst channelId = raw.channel_id || 'C0AKW7W9ZPX';\nconst userId    = raw.user_id    || '';\nconst clientId  = 'n8n-enh-' + Date.now();\n\n// Real-ESRGAN 4x upscale workflow\nconst workflow = {\n  \"1\": { \"inputs\": {\"image\": filename, \"upload\": \"image\"}, \"class_type\": \"LoadImage\" },\n  \"2\": { \"inputs\": {\"model_name\": \"RealESRGAN_x4plus.pth\"}, \"class_type\": \"UpscaleModelLoader\" },\n  \"3\": { \"inputs\": {\"upscale_model\": [\"2\",0], \"image\": [\"1\",0]}, \"class_type\": \"ImageUpscaleWithModel\" },\n  \"4\": { \"inputs\": {\"filename_prefix\": \"n8n_enhanced\", \"images\": [\"3\",0]}, \"class_type\": \"SaveImage\" }\n};\n\nreturn [{ json: { workflow, clientId, channelId, userId } }];\n"
+      }
+    },
+    {
+      "id": "e-submit",
+      "name": "Submit to ComfyUI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1160,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8188/prompt",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ prompt: $json.workflow, client_id: $json.clientId }) }}"
+      }
+    },
+    {
+      "id": "e-poll",
+      "name": "Poll Until Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        420
+      ],
+      "parameters": {
+        "jsCode": "\nconst promptId  = $input.first().json.prompt_id;\nconst buildData = $('Build Enhance Payload').first().json;\nconst maxTries  = 36;   // 3 min \u2014 upscaling is fast\n\nfor (let i = 0; i < maxTries; i++) {\n  await new Promise(r => setTimeout(r, 5000));\n  const history = await $helpers.httpRequest({\n    method: 'GET',\n    url: `http://host.docker.internal:8188/history/${promptId}`\n  });\n  const entry = history[promptId];\n  if (entry?.status?.completed) {\n    const imageNode = Object.values(entry.outputs || {}).find(o => o.images?.length);\n    if (imageNode) {\n      const img = imageNode.images[0];\n      return [{ json: {\n        promptId,\n        filename:  img.filename,\n        subfolder: img.subfolder || '',\n        type:      img.type || 'output',\n        channelId: buildData.channelId,\n        userId:    buildData.userId\n      }}];\n    }\n  }\n}\nthrow new Error('ComfyUI enhance timed out');\n"
+      }
+    },
+    {
+      "id": "e-download",
+      "name": "Download Enhanced Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1640,
+        420
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=http://host.docker.internal:8188/view?filename={{ encodeURIComponent($json.filename) }}&subfolder={{ $json.subfolder }}&type={{ $json.type }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "e-upload",
+      "name": "Upload to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1880,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/files.upload",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channels",
+              "value": "={{ $('Poll Until Done').first().json.channelId }}"
+            },
+            {
+              "name": "filename",
+              "value": "={{ $('Poll Until Done').first().json.filename }}"
+            },
+            {
+              "name": "title",
+              "value": ":sparkles: Enhanced Image (4x)"
+            },
+            {
+              "name": "initial_comment",
+              "value": ":arrow_up_small: *4x upscaled* with Real-ESRGAN"
+            },
+            {
+              "name": "file",
+              "parameterType": "formBinaryData",
+              "inputDataFieldName": "data"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ack Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ack Slack": {
+      "main": [
+        [
+          {
+            "node": "Download Source Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Source Image": {
+      "main": [
+        [
+          {
+            "node": "Upload to ComfyUI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to ComfyUI": {
+      "main": [
+        [
+          {
+            "node": "Build Enhance Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Enhance Payload": {
+      "main": [
+        [
+          {
+            "node": "Submit to ComfyUI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit to ComfyUI": {
+      "main": [
+        [
+          {
+            "node": "Poll Until Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Until Done": {
+      "main": [
+        [
+          {
+            "node": "Download Enhanced Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Enhanced Image": {
+      "main": [
+        [
+          {
+            "node": "Upload to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

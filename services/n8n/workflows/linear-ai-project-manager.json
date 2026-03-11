@@ -1,0 +1,326 @@
+{
+  "id": "linear-pm-001",
+  "name": "Linear AI Project Manager",
+  "active": false,
+  "nodes": [
+    {
+      "id": "lpm-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "linear-pm",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "linear-pm-wh"
+    },
+    {
+      "id": "lpm-ack-wh",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        160
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ok:true}) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "lpm-parse",
+      "name": "Parse Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        420
+      ],
+      "parameters": {
+        "jsCode": "\nconst body = $input.first().json.body || {};\n\n// Support both direct webhook calls and relay from events receiver\nconst text      = body.text || body.message || '';\nconst channelId = body.channel_id || body.channel || 'C0AJW9DTDSB';\nconst userId    = body.user_id || body.user || 'unknown';\nconst threadTs  = body.thread_ts || body.ts || '';\nconst userName  = body.user_name || body.username || 'unknown';\n\n// Strip bot @mentions\nconst cleanText = text.replace(/<@[^>]+>/g, '').trim();\n\nreturn [{ json: { text: cleanText, rawText: text, channelId, userId, userName, threadTs } }];\n"
+      }
+    },
+    {
+      "id": "lpm-classify",
+      "name": "Classify with Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        440,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{\nJSON.stringify({\n  model: \"llama3.1:70b\",\n  stream: false,\n  messages: [\n    {\n      role: \"system\",\n      content: `You are a project management AI for Biulatech. Analyze Slack messages and classify them into project management items.\n\nCLASSIFICATION TYPES:\n- epic: Large initiative spanning multiple sprints (e.g., \"build a new product feature\", \"migrate infrastructure\")\n- story: User-facing feature or capability (e.g., \"users can upload images\", \"add dark mode\")\n- task: Specific technical work item (e.g., \"fix login bug\", \"add API endpoint\", \"update documentation\")\n- bug: Something broken that needs fixing\n- idea: Interesting idea worth tracking but not yet committed\n- ignore: Casual chat, status updates, reactions, or content with no actionable project work\n\nOUTPUT FORMAT (JSON only, no extra text):\n{\n  \"type\": \"epic|story|task|bug|idea|ignore\",\n  \"title\": \"Short title (max 80 chars)\",\n  \"description\": \"Detailed description for the issue (2-3 sentences)\",\n  \"priority\": \"urgent|high|medium|low\",\n  \"labels\": [\"label1\", \"label2\"],\n  \"estimate\": 1-8,\n  \"reasoning\": \"Brief explanation of why you classified it this way\"\n}\n\nGUIDELINES:\n- Be selective: only classify messages with clear actionable work\n- Slack chatter, questions, and social messages \u2192 ignore\n- When a message describes building something \u2192 story or epic\n- When a message describes a specific fix or task \u2192 task\n- When a message reports something broken \u2192 bug\n- Assign priority based on urgency signals in the text\n- Labels should be from: frontend, backend, ai, infrastructure, research, design, data`\n    },\n    {\n      role: \"user\",\n      content: $('Parse Input').first().json.text\n    }\n  ]\n})\n}}"
+      }
+    },
+    {
+      "id": "lpm-parse-class",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        420
+      ],
+      "parameters": {
+        "jsCode": "\nconst raw = $input.first().json.message?.content || '';\nconst parsed = $('Parse Input').first().json;\n\nlet classification;\ntry {\n  // Extract JSON from the response (handle markdown code blocks)\n  const jsonMatch = raw.match(/```(?:json)?\\s*([\\s\\S]*?)\\s*```/) ||\n                    raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = jsonMatch ? jsonMatch[1] : raw;\n  classification = JSON.parse(jsonStr.trim());\n} catch(e) {\n  // Fallback: if parsing fails, mark as ignore\n  classification = { type: 'ignore', reasoning: 'Could not parse Ollama response' };\n}\n\n// Map priority strings to Linear priority integers\nconst PRIORITY_MAP = { urgent: 1, high: 2, medium: 3, low: 4 };\nconst priorityInt = PRIORITY_MAP[classification.priority] || 3;\n\nreturn [{ json: {\n  ...parsed,\n  classification,\n  issueType:   classification.type,\n  title:       classification.title || parsed.text.slice(0, 80),\n  description: classification.description || parsed.text,\n  priority:    priorityInt,\n  labels:      classification.labels || [],\n  estimate:    classification.estimate || null,\n  reasoning:   classification.reasoning || '',\n  shouldCreate: classification.type !== 'ignore'\n}}];\n"
+      }
+    },
+    {
+      "id": "lpm-check",
+      "name": "Should Create Issue?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        920,
+        420
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.shouldCreate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "lpm-get-team",
+      "name": "Get Linear Teams",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1160,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.LINEAR_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={ \"query\": \"{ teams { nodes { id name key } } }\" }"
+      }
+    },
+    {
+      "id": "lpm-create-issue",
+      "name": "Create Linear Issue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1400,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.LINEAR_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ (() => {\n  const teams = $('Get Linear Teams').first().json.data?.teams?.nodes || [];\n  const teamId = teams[0]?.id || '';   // Use first team; adjust if needed\n  const d = $('Parse Classification').first().json;\n\n  // Build label IDs string (Linear requires label IDs not names \u2014 we'll use title-based approach)\n  const desc = d.description + '\\n\\n---\\n*Source:* Slack message from <@' + d.userId + '> in <#' + d.channelId + '>\\n*AI reasoning:* ' + d.reasoning;\n\n  const mutation = `\n    mutation CreateIssue($input: IssueCreateInput!) {\n      issueCreate(input: $input) {\n        success\n        issue {\n          id\n          identifier\n          title\n          url\n          priority\n          state { name }\n        }\n      }\n    }\n  `;\n\n  const variables = {\n    input: {\n      teamId:      teamId,\n      title:       d.title,\n      description: desc,\n      priority:    d.priority,\n      estimate:    d.estimate\n    }\n  };\n\n  return JSON.stringify({ query: mutation, variables });\n})() }}"
+      }
+    },
+    {
+      "id": "lpm-format",
+      "name": "Format Confirmation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1640,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nconst issue = $input.first().json.data?.issueCreate?.issue;\nconst d     = $('Parse Classification').first().json;\n\nif (!issue) {\n  return [{ json: {\n    channelId: d.channelId,\n    threadTs:  d.threadTs,\n    payload: JSON.stringify({\n      channel: d.channelId,\n      thread_ts: d.threadTs,\n      text: '\u26a0\ufe0f Linear issue creation failed. Check LINEAR_API_KEY env var.'\n    })\n  }}];\n}\n\nconst TYPE_EMOJI = { epic:'\ud83d\uddfa\ufe0f', story:'\ud83d\udcd6', task:'\u2705', bug:'\ud83d\udc1b', idea:'\ud83d\udca1' };\nconst PRIORITY_LABEL = { 1:'\ud83d\udd34 Urgent', 2:'\ud83d\udfe0 High', 3:'\ud83d\udfe1 Medium', 4:'\ud83d\udd35 Low' };\n\nconst emoji    = TYPE_EMOJI[d.issueType] || '\u2705';\nconst priority = PRIORITY_LABEL[d.priority] || 'Medium';\nconst labelsStr = d.labels.length ? d.labels.map(l=>'`'+l+'`').join(' ') : '';\n\nconst blocks = [\n  {\n    type: 'section',\n    text: { type: 'mrkdwn', text:\n      `${emoji} *<${issue.url}|${issue.identifier}: ${issue.title}>* created in Linear\\n` +\n      `*Type:* ${d.issueType}  |  *Priority:* ${priority}${labelsStr ? '  |  *Labels:* '+labelsStr : ''}`\n    }\n  },\n  {\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: `_${d.reasoning}_` }]\n  }\n];\n\nreturn [{ json: {\n  channelId: d.channelId,\n  threadTs:  d.threadTs,\n  payload: JSON.stringify({\n    channel:   d.channelId,\n    thread_ts: d.threadTs || undefined,\n    blocks\n  })\n}}];\n"
+      }
+    },
+    {
+      "id": "lpm-post",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1880,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ $json.payload }}"
+      }
+    },
+    {
+      "id": "lpm-noop",
+      "name": "No-op (Ignored)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        560
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ignored: true, reason: $input.first().json.reasoning } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Input": {
+      "main": [
+        [
+          {
+            "node": "Classify with Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify with Ollama": {
+      "main": [
+        [
+          {
+            "node": "Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Should Create Issue?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Create Issue?": {
+      "main": [
+        [
+          {
+            "node": "Get Linear Teams",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No-op (Ignored)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Linear Teams": {
+      "main": [
+        [
+          {
+            "node": "Create Linear Issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Linear Issue": {
+      "main": [
+        [
+          {
+            "node": "Format Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

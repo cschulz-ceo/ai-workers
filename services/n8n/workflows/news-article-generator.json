@@ -1,0 +1,223 @@
+{
+  "name": "News Article Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "news-search",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "news-search"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst topic = body.topic || 'technology';\nconst channelId = body.channel_id || '';\nconst responseUrl = body.response_url || '';\n\nreturn [{ json: {\n  topic,\n  channelId,\n  responseUrl\n}}];"
+      },
+      "id": "node-parse",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ text: ':newspaper: Searching for news on *' + $json.topic + '*...' }) }}",
+        "options": {}
+      },
+      "id": "node-ack",
+      "name": "Ack Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://news.google.com/rss/search?q=' + encodeURIComponent($json.topic) + '&hl=en-US&gl=US&ceid=US:en' }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-fetch-rss",
+      "name": "Fetch RSS Feeds",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse RSS XML into articles array\nconst xmlText = $input.first().json.data || $input.first().json.body || '';\nconst items = [];\nconst itemRegex = /<item>([\\s\\S]*?)<\\/item>/g;\nlet match;\n\nwhile ((match = itemRegex.exec(xmlText)) !== null && items.length < 5) {\n  const item = match[1];\n  const getTag = (tag) => {\n    const m = item.match(new RegExp(`<${tag}[^>]*>(?:<![CDATA[)?([\\ s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 'i'));\n    return m ? m[1].trim() : '';\n  };\n  \n  const title = getTag('title').replace(/<[^>]+>/g, '');\n  const source = getTag('source') || getTag('dc:creator') || 'Unknown';\n  const date = getTag('pubDate') || getTag('dc:date') || '';\n  const description = getTag('description').replace(/<[^>]+>/g, '').slice(0, 200);\n  const url = getTag('link') || getTag('guid');\n  \n  if (title && url) {\n    items.push({\n      title,\n      source,\n      date,\n      description,\n      url\n    });\n  }\n}\n\nconst topic = $('Parse Request').first().json.topic;\nreturn [{ json: { topic, articles: items } }];"
+      },
+      "id": "node-parse-rss",
+      "name": "Parse RSS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'llama3.1:70b', messages: [{ role: 'user', content: 'You are a news analyst. Review these 5 articles and provide a brief 1-sentence summary of each. Format as JSON array with fields: title, source, date, summary, url. Here are the articles: ' + JSON.stringify($json.articles) }], stream: false }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "node-ollama",
+      "name": "Summarize with Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Ollama response and format Slack blocks\nconst ollamaResp = $input.first().json;\nconst msgContent = ollamaResp.message?.content || '{}';\nlet articlesData = [];\n\ntry {\n  // Try to extract JSON from the response\n  const jsonMatch = msgContent.match(/\\[\\s*\\{[\\s\\S]*?\\}\\s*\\]/); \n  articlesData = jsonMatch ? JSON.parse(jsonMatch[0]) : $('Parse RSS').first().json.articles;\n} catch (e) {\n  articlesData = $('Parse RSS').first().json.articles;\n}\n\nconst topic = $('Parse RSS').first().json.topic;\n\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':newspaper: Top 5 News Results: ' + topic, emoji: true }\n  },\n  { type: 'divider' }\n];\n\narticlesData.forEach((article, idx) => {\n  blocks.push({\n    type: 'section',\n    text: {\n      type: 'mrkdwn',\n      text: `*<${article.url}|${article.title}>*\\n${article.source} • ${article.date}\\n_${article.summary || article.description}_`\n    }\n  });\n  \n  if (idx < articlesData.length - 1) {\n    blocks.push({ type: 'divider' });\n  }\n});\n\nconst responseUrl = $('Parse Request').first().json.responseUrl;\nreturn [{ json: {\n  responseUrl,\n  blocks\n}}];"
+      },
+      "id": "node-format",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ response_type: 'in_channel', blocks: $json.blocks }) }}",
+        "options": {}
+      },
+      "id": "node-post",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [
+          {
+            "node": "Ack Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ack Slack": {
+      "main": [
+        [
+          {
+            "node": "Fetch RSS Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RSS Feeds": {
+      "main": [
+        [
+          {
+            "node": "Parse RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse RSS": {
+      "main": [
+        [
+          {
+            "node": "Summarize with Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize with Ollama": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

@@ -1,0 +1,472 @@
+{
+  "name": "Weekly News Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "node-schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://news.google.com/rss/search?q=immersive%20technology%20XR%20AR%20VR&hl=en-US&gl=US&ceid=US:en",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-fetch-immersive",
+      "name": "Fetch Immersive Tech",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 180]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://news.google.com/rss/search?q=quantum%20computing%20technology&hl=en-US&gl=US&ceid=US:en",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-fetch-quantum",
+      "name": "Fetch Quantum Tech",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 320]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://news.google.com/rss/search?q=startup%20business%20strategy%20funding&hl=en-US&gl=US&ceid=US:en",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-fetch-startup",
+      "name": "Fetch Startup News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse RSS feeds for all 3 topics\nfunction parseRSS(xmlText) {\n  const items = [];\n  const itemRegex = /<item>([\\s\\S]*?)<\\/item>/g;\n  let match;\n\n  while ((match = itemRegex.exec(xmlText)) !== null && items.length < 5) {\n    const item = match[1];\n    const getTag = (tag) => {\n      const m = item.match(new RegExp(`<${tag}[^>]*>(?:<![CDATA[)?([\\ s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 'i'));\n      return m ? m[1].trim() : '';\n    };\n    \n    const title = getTag('title').replace(/<[^>]+>/g, '');\n    const source = getTag('source') || getTag('dc:creator') || 'Unknown';\n    const date = getTag('pubDate') || getTag('dc:date') || '';\n    const description = getTag('description').replace(/<[^>]+>/g, '').slice(0, 150);\n    const url = getTag('link') || getTag('guid');\n    \n    if (title && url) {\n      items.push({ title, source, date, description, url });\n    }\n  }\n  return items;\n}\n\nconst immersiveXml = $('Fetch Immersive Tech').first().json.data || $('Fetch Immersive Tech').first().json.body || '';\nconst quantumXml = $('Fetch Quantum Tech').first().json.data || $('Fetch Quantum Tech').first().json.body || '';\nconst startupXml = $('Fetch Startup News').first().json.data || $('Fetch Startup News').first().json.body || '';\n\nconst immersiveArticles = parseRSS(immersiveXml);\nconst quantumArticles = parseRSS(quantumXml);\nconst startupArticles = parseRSS(startupXml);\n\nreturn [{ json: {\n  topics: [\n    { name: 'immersive technology XR AR VR', channel: 'C0AL15CESF4', articles: immersiveArticles },\n    { name: 'quantum computing technology', channel: 'C0ALE2MSHL1', articles: quantumArticles },\n    { name: 'startup business strategy funding', channel: 'C0AKUPCPSD9', articles: startupArticles }\n  ]\n}}];"
+      },
+      "id": "node-process-all",
+      "name": "Process All Topics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'llama3.1:70b', messages: [{ role: 'user', content: 'You are a news analyst. Review these articles and provide a brief 1-sentence summary of each. Format as JSON array with fields: title, source, date, summary, url. Articles: ' + JSON.stringify($('Process All Topics').first().json.topics[0].articles) }], stream: false }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "node-summarize-immersive",
+      "name": "Summarize Immersive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'llama3.1:70b', messages: [{ role: 'user', content: 'You are a news analyst. Review these articles and provide a brief 1-sentence summary of each. Format as JSON array with fields: title, source, date, summary, url. Articles: ' + JSON.stringify($('Process All Topics').first().json.topics[1].articles) }], stream: false }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "node-summarize-quantum",
+      "name": "Summarize Quantum",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'llama3.1:70b', messages: [{ role: 'user', content: 'You are a news analyst. Review these articles and provide a brief 1-sentence summary of each. Format as JSON array with fields: title, source, date, summary, url. Articles: ' + JSON.stringify($('Process All Topics').first().json.topics[2].articles) }], stream: false }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "node-summarize-startup",
+      "name": "Summarize Startup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 420]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format immersive tech for Slack\nconst ollamaResp = $input.first().json;\nconst msgContent = ollamaResp.message?.content || '{}';\nlet articlesData = [];\n\ntry {\n  const jsonMatch = msgContent.match(/\\[\\s*\\{[\\s\\S]*?\\}\\s*\\]/);\n  articlesData = jsonMatch ? JSON.parse(jsonMatch[0]) : $('Process All Topics').first().json.topics[0].articles;\n} catch (e) {\n  articlesData = $('Process All Topics').first().json.topics[0].articles;\n}\n\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':telescope: Immersive Technology', emoji: true }\n  },\n  { type: 'divider' }\n];\n\narticlesData.forEach((article, idx) => {\n  blocks.push({\n    type: 'section',\n    text: {\n      type: 'mrkdwn',\n      text: `*<${article.url}|${article.title}>*\\n${article.source} • ${article.date}\\n_${article.summary || article.description}_`\n    }\n  });\n  if (idx < articlesData.length - 1) blocks.push({ type: 'divider' });\n});\n\nreturn [{ json: { channel: 'C0AL15CESF4', blocks } }];"
+      },
+      "id": "node-format-immersive",
+      "name": "Format Immersive",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 140]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format quantum tech for Slack\nconst ollamaResp = $input.first().json;\nconst msgContent = ollamaResp.message?.content || '{}';\nlet articlesData = [];\n\ntry {\n  const jsonMatch = msgContent.match(/\\[\\s*\\{[\\s\\S]*?\\}\\s*\\]/);\n  articlesData = jsonMatch ? JSON.parse(jsonMatch[0]) : $('Process All Topics').first().json.topics[1].articles;\n} catch (e) {\n  articlesData = $('Process All Topics').first().json.topics[1].articles;\n}\n\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':atom: Quantum Computing', emoji: true }\n  },\n  { type: 'divider' }\n];\n\narticlesData.forEach((article, idx) => {\n  blocks.push({\n    type: 'section',\n    text: {\n      type: 'mrkdwn',\n      text: `*<${article.url}|${article.title}>*\\n${article.source} • ${article.date}\\n_${article.summary || article.description}_`\n    }\n  });\n  if (idx < articlesData.length - 1) blocks.push({ type: 'divider' });\n});\n\nreturn [{ json: { channel: 'C0ALE2MSHL1', blocks } }];"
+      },
+      "id": "node-format-quantum",
+      "name": "Format Quantum",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format startup news for Slack\nconst ollamaResp = $input.first().json;\nconst msgContent = ollamaResp.message?.content || '{}';\nlet articlesData = [];\n\ntry {\n  const jsonMatch = msgContent.match(/\\[\\s*\\{[\\s\\S]*?\\}\\s*\\]/);\n  articlesData = jsonMatch ? JSON.parse(jsonMatch[0]) : $('Process All Topics').first().json.topics[2].articles;\n} catch (e) {\n  articlesData = $('Process All Topics').first().json.topics[2].articles;\n}\n\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':rocket: Startup & Business', emoji: true }\n  },\n  { type: 'divider' }\n];\n\narticlesData.forEach((article, idx) => {\n  blocks.push({\n    type: 'section',\n    text: {\n      type: 'mrkdwn',\n      text: `*<${article.url}|${article.title}>*\\n${article.source} • ${article.date}\\n_${article.summary || article.description}_`\n    }\n  });\n  if (idx < articlesData.length - 1) blocks.push({ type: 'divider' });\n});\n\nreturn [{ json: { channel: 'C0AKUPCPSD9', blocks } }];"
+      },
+      "id": "node-format-startup",
+      "name": "Format Startup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: $json.channel, blocks: $json.blocks }) }}",
+        "options": {}
+      },
+      "id": "node-post-immersive",
+      "name": "Post Immersive News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: $json.channel, blocks: $json.blocks }) }}",
+        "options": {}
+      },
+      "id": "node-post-quantum",
+      "name": "Post Quantum News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: $json.channel, blocks: $json.blocks }) }}",
+        "options": {}
+      },
+      "id": "node-post-startup",
+      "name": "Post Startup News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: 'C0AKJ7905AT', text: ':newspaper: Weekly news digest posted to 3 channels' }) }}",
+        "options": {}
+      },
+      "id": "node-notify-digest",
+      "name": "Notify ops-digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1520, 320]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Immersive Tech",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Immersive Tech": {
+      "main": [
+        [
+          {
+            "node": "Fetch Quantum Tech",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Quantum Tech": {
+      "main": [
+        [
+          {
+            "node": "Fetch Startup News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Startup News": {
+      "main": [
+        [
+          {
+            "node": "Process All Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process All Topics": {
+      "main": [
+        [
+          {
+            "node": "Summarize Immersive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Summarize Quantum",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Summarize Startup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Immersive": {
+      "main": [
+        [
+          {
+            "node": "Format Immersive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Quantum": {
+      "main": [
+        [
+          {
+            "node": "Format Quantum",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Startup": {
+      "main": [
+        [
+          {
+            "node": "Format Startup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Immersive": {
+      "main": [
+        [
+          {
+            "node": "Post Immersive News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Quantum": {
+      "main": [
+        [
+          {
+            "node": "Post Quantum News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Startup": {
+      "main": [
+        [
+          {
+            "node": "Post Startup News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Immersive News": {
+      "main": [
+        [
+          {
+            "node": "Notify ops-digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Quantum News": {
+      "main": [
+        [
+          {
+            "node": "Notify ops-digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Startup News": {
+      "main": [
+        [
+          {
+            "node": "Notify ops-digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "active": false
+}
