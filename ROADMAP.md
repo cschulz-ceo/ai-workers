@@ -34,8 +34,8 @@ Full Slack ↔ n8n communication layer.
 | Slash commands registered | ✅ | /ai, /ai-status, /ai-draw, /ai-diagnose |
 | n8n events receiver workflow | ✅ | /webhook/slack-events, url_verification |
 | n8n command handler workflow (ack) | ✅ | /webhook/slack-command, 3s ack working |
-| Enable Slack Event Subscriptions | 🔲 | Needs: toggle on in Slack app settings |
-| Slack credentials in n8n | 🔲 | Add xoxb- token + signing secret as n8n Credentials |
+| Enable Slack Event Subscriptions | 🔄 | In progress |
+| Slack credentials in n8n | ✅ | Header Auth credential configured |
 
 ### Manual step: Enable Event Subscriptions
 1. Slack app → Features → Event Subscriptions → toggle On
@@ -204,4 +204,4 @@ Move from ngrok free tier to proper domain.
 
 | Date | Completed |
 |------|-----------|
-| 2026-03-11 | Infrastructure, ngrok, personalities, Slack channels, slash commands, end-to-end test |
+| 2026-03-11 | Infrastructure, ngrok, personalities, Slack channels, slash commands, /ai → Ollama working, /ai-status working, dual-channel ops posting |
