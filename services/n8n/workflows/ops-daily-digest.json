@@ -1,0 +1,243 @@
+{
+  "name": "Ops Daily Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "node-schedule",
+      "name": "Daily 9am Weekdays",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://host.docker.internal:11434/api/tags",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-ollama-models",
+      "name": "Ollama Models",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://host.docker.internal:11434/api/ps",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-ollama-ps",
+      "name": "Ollama Running",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 320]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:5678/healthz",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "node-n8n-health",
+      "name": "n8n Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "{\"model\": \"kevin:latest\", \"messages\": [{\"role\": \"user\", \"content\": \"Write one upbeat motivational sentence (max 20 words) to start the workday. Be concise and energetic.\"}], \"stream\": false}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "node-kevin-quote",
+      "name": "Kevin Quote",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the morning digest\nconst modelsData = $('Ollama Models').first().json;\nconst psData = $('Ollama Running').first().json;\nconst n8nData = $('n8n Health').first().json;\nconst kevinData = $('Kevin Quote').first().json;\n\n// Models inventory\nconst allModels = (modelsData.models || []).map(m => m.name);\nconst personalities = ['kevin:latest', 'jason:latest', 'scaachi:latest', 'christian:latest', 'chidi:latest'];\nconst missingPersonalities = personalities.filter(p => !allModels.includes(p));\n\n// Running models in VRAM\nconst runningModels = (psData.models || []).map(m => m.name);\n\n// System status\nconst n8nOk = n8nData.status === 'ok';\nconst ollamaOk = allModels.length > 0;\nconst personalitiesOk = missingPersonalities.length === 0;\n\nconst overallStatus = (n8nOk && ollamaOk && personalitiesOk)\n  ? '🟢 All systems operational'\n  : '🟡 Degraded — check details below';\n\n// Kevin's quote\nconst kevinQuote = kevinData.message?.content?.trim() || 'Ready to build great things today!';\n\n// Day of week\nconst days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];\nconst today = days[new Date().getDay()];\nconst dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });\n\nconst digest = [\n  `*🌅 Good Morning — ${today}, ${dateStr}*`,\n  ``,\n  `*Status:* ${overallStatus}`,\n  ``,\n  `*📊 System Health*`,\n  `• n8n Automation: ${n8nOk ? '✅ Online' : '❌ Down'}`,\n  `• Ollama Service: ${ollamaOk ? `✅ ${allModels.length} models` : '❌ Unreachable'}`,\n  `• Personalities: ${personalitiesOk ? '✅ All 5 ready' : `⚠️ Missing: ${missingPersonalities.join(', ')}`}`,\n  `• VRAM Loaded: ${runningModels.length > 0 ? runningModels.join(', ') : 'None (cold start)'}`,\n  ``,\n  `*🤖 Active Agents*`,\n  `• Kevin O'Malley (Legal) — counsel-kevin, tasks-kevin`,\n  `• Jason Mendoza (Engineering) — counsel-jason, tasks-jason`,\n  `• Scaachi Koul (Marketing) — counsel-scaachi, tasks-scaachi`,\n  `• Christian Lacy (Strategy) — counsel-christian, tasks-christian`,\n  `• Chidi Anagonye (Research) — counsel-chidi, tasks-chidi`,\n  ``,\n  `*💬 Kevin's Morning Take*`,\n  `_\"${kevinQuote}\"_`,\n  ``,\n  `_Use /ai-status for live status • /ai-diagnose for full diagnostics_`\n].join('\\n');\n\nreturn [{ json: { digest } }];"
+      },
+      "id": "node-build-digest",
+      "name": "Build Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: 'C0AKJ7905AT', blocks: [{ type: 'section', text: { type: 'mrkdwn', text: $json.digest } }] }) }}",
+        "options": {}
+      },
+      "id": "node-post-digest",
+      "name": "Post to ops-digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: 'C0AKT94FE4T', text: ':calendar: Daily digest posted to #ops-digest' }) }}",
+        "options": {}
+      },
+      "id": "node-notify-status",
+      "name": "Notify ops-status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 380]
+    }
+  ],
+  "connections": {
+    "Daily 9am Weekdays": {
+      "main": [
+        [
+          {
+            "node": "Ollama Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Models": {
+      "main": [
+        [
+          {
+            "node": "Ollama Running",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Running": {
+      "main": [
+        [
+          {
+            "node": "n8n Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "n8n Health": {
+      "main": [
+        [
+          {
+            "node": "Kevin Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kevin Quote": {
+      "main": [
+        [
+          {
+            "node": "Build Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Digest": {
+      "main": [
+        [
+          {
+            "node": "Post to ops-digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to ops-digest": {
+      "main": [
+        [
+          {
+            "node": "Notify ops-status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "active": false
+}

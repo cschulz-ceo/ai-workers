@@ -1,0 +1,294 @@
+{
+  "name": "Slack Diagnose Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-diagnose",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "slack-diagnose"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"response_type\": \"ephemeral\", \"text\": \":microscope: *AI Diagnose* running checks... results in ~30 seconds.\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-ack",
+      "name": "Ack Command",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://host.docker.internal:11434/api/tags",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-ollama-models",
+      "name": "Ollama Models",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://host.docker.internal:11434/api/ps",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-ollama-ps",
+      "name": "Ollama Running",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "{\"model\": \"kevin:latest\", \"messages\": [{\"role\": \"user\", \"content\": \"Reply with exactly one word: OK\"}], \"stream\": false}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "node-kevin-ping",
+      "name": "Kevin Ping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 440]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:5678/healthz",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "node-n8n-health",
+      "name": "n8n Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/auth.test",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-slack-auth",
+      "name": "Slack Auth Test",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 680]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gather all diagnostic results and build report\nconst webhookData = $('Webhook').first().json.body;\nconst responseUrl = webhookData.response_url || '';\nconst userId = webhookData.user_id || 'unknown';\nconst channelId = webhookData.channel_id || '';\n\n// Ollama models\nlet modelsStatus = '❌ Unreachable';\nlet modelsList = [];\ntry {\n  const modelsData = $('Ollama Models').first().json;\n  modelsList = (modelsData.models || []).map(m => m.name);\n  modelsStatus = `✅ ${modelsList.length} models available`;\n} catch(e) { modelsStatus = `❌ Error: ${e.message}`; }\n\n// Ollama running\nlet runningStatus = '❌ No models loaded';\ntry {\n  const psData = $('Ollama Running').first().json;\n  const running = psData.models || [];\n  runningStatus = running.length > 0\n    ? `✅ ${running.map(m => m.name).join(', ')}`\n    : '⚠️ No models currently loaded in VRAM';\n} catch(e) { runningStatus = `❌ Error: ${e.message}`; }\n\n// Kevin ping\nlet kevinStatus = '❌ No response';\ntry {\n  const kevinData = $('Kevin Ping').first().json;\n  const reply = kevinData.message?.content || '';\n  kevinStatus = reply.trim() ? `✅ Responded: \"${reply.trim().slice(0, 50)}\"` : '⚠️ Empty response';\n} catch(e) { kevinStatus = `❌ Error: ${e.message}`; }\n\n// n8n health\nlet n8nStatus = '❌ Unreachable';\ntry {\n  const n8nData = $('n8n Health').first().json;\n  n8nStatus = n8nData.status === 'ok' ? '✅ Healthy' : `⚠️ Status: ${n8nData.status}`;\n} catch(e) { n8nStatus = `❌ Error: ${e.message}`; }\n\n// Slack auth\nlet slackStatus = '❌ Auth failed';\ntry {\n  const slackData = $('Slack Auth Test').first().json;\n  if (slackData.ok) {\n    slackStatus = `✅ Connected as @${slackData.bot_id || slackData.user_id}`;\n  } else {\n    slackStatus = `❌ Error: ${slackData.error}`;\n  }\n} catch(e) { slackStatus = `❌ Error: ${e.message}`; }\n\n// Personality models check\nconst personalities = ['kevin:latest', 'jason:latest', 'scaachi:latest', 'christian:latest', 'chidi:latest'];\nconst missingPersonalities = personalities.filter(p => !modelsList.includes(p));\nconst personalitiesStatus = missingPersonalities.length === 0\n  ? `✅ All 5 personalities loaded`\n  : `⚠️ Missing: ${missingPersonalities.join(', ')}`;\n\n// Build the report\nconst now = new Date().toISOString().slice(0, 19).replace('T', ' ') + ' UTC';\n\nconst reportText = [\n  `*🔬 AI Workers Diagnostic Report*`,\n  `_Run by <@${userId}> at ${now}_`,\n  ``,\n  `*Infrastructure*`,\n  `• n8n Automation: ${n8nStatus}`,\n  `• Slack API: ${slackStatus}`,\n  ``,\n  `*Ollama / Models*`,\n  `• Ollama Service: ${modelsStatus}`,\n  `• Personalities: ${personalitiesStatus}`,\n  `• VRAM Loaded: ${runningStatus}`,\n  ``,\n  `*Live Test*`,\n  `• Kevin Response: ${kevinStatus}`,\n  ``,\n  `*Available Models (${modelsList.length})*`,\n  modelsList.length > 0 ? modelsList.map(m => `  · ${m}`).join('\\n') : '  _none_'\n].join('\\n');\n\nreturn [{ json: { responseUrl, channelId, reportText } }];"
+      },
+      "id": "node-build-report",
+      "name": "Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ response_type: 'in_channel', blocks: [{ type: 'section', text: { type: 'mrkdwn', text: $json.reportText } }] }) }}",
+        "options": {}
+      },
+      "id": "node-post-report",
+      "name": "Post to Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: 'C0AKT94FE4T', blocks: [{ type: 'section', text: { type: 'mrkdwn', text: $('Build Report').first().json.reportText } }] }) }}",
+        "options": {}
+      },
+      "id": "node-post-ops",
+      "name": "Post to ops-status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 440]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Ack Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ack Command": {
+      "main": [
+        [
+          {
+            "node": "Ollama Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Models": {
+      "main": [
+        [
+          {
+            "node": "Ollama Running",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Running": {
+      "main": [
+        [
+          {
+            "node": "Kevin Ping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kevin Ping": {
+      "main": [
+        [
+          {
+            "node": "n8n Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "n8n Health": {
+      "main": [
+        [
+          {
+            "node": "Slack Auth Test",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Auth Test": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report": {
+      "main": [
+        [
+          {
+            "node": "Post to Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Channel": {
+      "main": [
+        [
+          {
+            "node": "Post to ops-status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}
