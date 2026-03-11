@@ -42,7 +42,7 @@
       "name": "Ollama Models",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 200]
+      "position": [640, 300]
     },
     {
       "parameters": {
@@ -54,7 +54,7 @@
       "name": "Ollama Running",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 400]
+      "position": [860, 300]
     },
     {
       "parameters": {
@@ -66,17 +66,17 @@
       "name": "n8n Health",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 600]
+      "position": [1060, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Gather data from all three upstream nodes\nconst modelsData = $('Ollama Models').first().json;\nconst psData = $('Ollama Running').first().json;\nconst n8nData = $('n8n Health').first().json;\n\n// Models\nconst allModels = modelsData.models || [];\nconst personalities = allModels.filter(m => ['kevin','jason','scaachi','christian','chidi'].some(p => m.name.startsWith(p)));\nconst baseModels = allModels.filter(m => !['kevin','jason','scaachi','christian','chidi','nomic'].some(p => m.name.startsWith(p)));\n\n// Running models\nconst running = psData.models || [];\nlet vramUsed = 0;\nlet runningNames = [];\nfor (const m of running) {\n  vramUsed += (m.size_vram || 0);\n  runningNames.push(m.name.split(':')[0]);\n}\nconst vramGB = (vramUsed / 1e9).toFixed(1);\n\n// Status indicators\nconst ollamaOk = allModels.length > 0;\nconst n8nOk = n8nData.status === 'ok';\n\nconst ollamaIcon = ollamaOk ? ':large_green_circle:' : ':red_circle:';\nconst n8nIcon = n8nOk ? ':large_green_circle:' : ':red_circle:';\nconst runningText = runningNames.length > 0\n  ? runningNames.join(', ') + ` (${vramGB}GB VRAM)`\n  : 'none';\n\nconst personalityList = personalities.map(m => m.name.split(':')[0]).join(', ');\n\nconst now = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour12: true });\n\nconst statusText = [\n  `*ai-workers system status* — ${now}`,\n  '',\n  `${ollamaIcon} *Ollama* — ${allModels.length} models loaded`,\n  `  Personalities: ${personalityList || 'none'}`,\n  `  Active: ${runningText}`,\n  '',\n  `${n8nIcon} *n8n* — ${n8nOk ? 'healthy' : 'DOWN'}`,\n  `  Tunnel: https://appendicular-wilson-looser.ngrok-free.dev`,\n  '',\n  `:large_green_circle: *Open WebUI* — http://localhost:8080`\n].join('\\n');\n\nreturn [{ json: {\n  statusText,\n  responseUrl: $('Webhook').first().json.body?.response_url || ''\n}}];"
+        "jsCode": "const modelsData = $('Ollama Models').first().json;\nconst psData = $('Ollama Running').first().json;\nconst n8nData = $('n8n Health').first().json;\nconst webhookBody = $('Webhook').first().json.body || {};\n\nconst allModels = modelsData.models || [];\nconst PERSONALITY_NAMES = ['kevin','jason','scaachi','christian','chidi'];\nconst personalities = allModels.filter(m =>\n  PERSONALITY_NAMES.some(p => m.name.startsWith(p))\n);\n\nconst running = psData.models || [];\nlet vramUsed = 0;\nlet runningNames = [];\nfor (const m of running) {\n  vramUsed += (m.size_vram || 0);\n  runningNames.push(m.name.split(':')[0]);\n}\nconst vramGB = (vramUsed / 1e9).toFixed(1);\n\nconst ollamaOk = allModels.length > 0;\nconst n8nOk = n8nData.status === 'ok';\n\nconst ollamaIcon = ollamaOk ? ':large_green_circle:' : ':red_circle:';\nconst n8nIcon = n8nOk ? ':large_green_circle:' : ':red_circle:';\nconst runningText = runningNames.length > 0\n  ? runningNames.join(', ') + ' (' + vramGB + 'GB VRAM)'\n  : 'none (models unloaded)';\n\nconst personalityList = personalities.map(m => m.name.split(':')[0]).join(', ') || 'none';\n\nconst now = new Date().toLocaleString('en-US', {\n  timeZone: 'America/New_York', hour12: true,\n  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'\n});\n\nconst lines = [\n  '*ai-workers system status* — ' + now,\n  '',\n  ollamaIcon + ' *Ollama* — ' + allModels.length + ' models available',\n  '  Personalities: ' + personalityList,\n  '  In memory: ' + runningText,\n  '',\n  n8nIcon + ' *n8n* — ' + (n8nOk ? 'healthy' : 'DOWN'),\n  '  Tunnel: https://appendicular-wilson-looser.ngrok-free.dev',\n  '',\n  ':large_green_circle: *Open WebUI* — http://localhost:8080'\n];\n\nreturn [{ json: {\n  statusText: lines.join('\\n'),\n  responseUrl: webhookBody.response_url || ''\n}}];"
       },
       "id": "node-build",
       "name": "Build Status",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [860, 400]
+      "position": [1260, 300]
     },
     {
       "parameters": {
@@ -96,7 +96,7 @@
       "name": "Post to Command Channel",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1080, 300]
+      "position": [1480, 200]
     },
     {
       "parameters": {
@@ -104,8 +104,10 @@
         "url": "https://slack.com/api/chat.postMessage",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}" },
-                         { "name": "Content-Type", "value": "application/json" }]
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.SLACK_BOT_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
         },
         "sendBody": true,
         "contentType": "raw",
@@ -117,7 +119,7 @@
       "name": "Post to #ops-status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1080, 500]
+      "position": [1480, 400]
     }
   ],
   "connections": {
@@ -125,20 +127,16 @@
       "main": [[{ "node": "Ack Slack", "type": "main", "index": 0 }]]
     },
     "Ack Slack": {
-      "main": [[
-        { "node": "Ollama Models", "type": "main", "index": 0 },
-        { "node": "Ollama Running", "type": "main", "index": 0 },
-        { "node": "n8n Health", "type": "main", "index": 0 }
-      ]]
+      "main": [[{ "node": "Ollama Models", "type": "main", "index": 0 }]]
     },
     "Ollama Models": {
-      "main": [[{ "node": "Build Status", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Ollama Running", "type": "main", "index": 0 }]]
     },
     "Ollama Running": {
-      "main": [[{ "node": "Build Status", "type": "main", "index": 1 }]]
+      "main": [[{ "node": "n8n Health", "type": "main", "index": 0 }]]
     },
     "n8n Health": {
-      "main": [[{ "node": "Build Status", "type": "main", "index": 2 }]]
+      "main": [[{ "node": "Build Status", "type": "main", "index": 0 }]]
     },
     "Build Status": {
       "main": [[
