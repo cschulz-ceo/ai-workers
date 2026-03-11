@@ -1,0 +1,73 @@
+{
+  "display_information": {
+    "name": "ai-workers",
+    "description": "Autonomous AI agent interface for Biulatech",
+    "background_color": "#1a1a2e"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "ai-workers",
+      "always_online": true
+    },
+    "slash_commands": [
+      {
+        "command": "/ai",
+        "url": "https://appendicular-wilson-looser.ngrok-free.dev/webhook/slack-command",
+        "description": "Trigger AI agent tasks",
+        "usage_hint": "task description",
+        "should_escape": false
+      },
+      {
+        "command": "/ai-status",
+        "url": "https://appendicular-wilson-looser.ngrok-free.dev/webhook/slack-status",
+        "description": "Report system and agent status",
+        "should_escape": false
+      },
+      {
+        "command": "/ai-draw",
+        "url": "https://appendicular-wilson-looser.ngrok-free.dev/webhook/slack-draw",
+        "description": "Generate an image with ComfyUI",
+        "usage_hint": "image description",
+        "should_escape": false
+      },
+      {
+        "command": "/ai-diagnose",
+        "url": "https://appendicular-wilson-looser.ngrok-free.dev/webhook/slack-diagnose",
+        "description": "Run environment health checks",
+        "should_escape": false
+      }
+    ]
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "chat:write.public",
+        "channels:read",
+        "channels:history",
+        "channels:manage",
+        "groups:write",
+        "users:read",
+        "commands",
+        "reactions:write",
+        "files:write"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://appendicular-wilson-looser.ngrok-free.dev/webhook/slack-events",
+      "bot_events": [
+        "message.channels",
+        "app_mention"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://appendicular-wilson-looser.ngrok-free.dev/webhook/slack-interactive"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}
