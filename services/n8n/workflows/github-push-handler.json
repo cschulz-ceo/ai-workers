@@ -68,14 +68,12 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\"ok\": true}",
-        "options": { "responseCode": 200 }
+        "jsCode": "return [{ json: { ok: true, skipped: true } }];"
       },
-      "id": "node-ack-ignore",
-      "name": "Ack",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "id": "node-noop",
+      "name": "No-op",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [860, 400]
     }
   ],
@@ -89,7 +87,7 @@
     "Is Push?": {
       "main": [
         [{ "node": "Post to ops-updates", "type": "main", "index": 0 }],
-        [{ "node": "Ack", "type": "main", "index": 0 }]
+        [{ "node": "No-op", "type": "main", "index": 0 }]
       ]
     }
   },
