@@ -1,0 +1,137 @@
+{
+  "name": "Ops Service Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "node-schedule",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://host.docker.internal:11434/api/tags",
+        "options": { "timeout": 8000 }
+      },
+      "id": "node-ollama",
+      "name": "Check Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:5678/healthz",
+        "options": { "timeout": 5000 }
+      },
+      "id": "node-n8n",
+      "name": "Check n8n",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 320],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:3000",
+        "options": { "timeout": 8000 }
+      },
+      "id": "node-webui",
+      "name": "Check Open WebUI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 440],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Evaluate service health and detect state changes\n// Uses static data to track previous state and avoid repeat alerts\n\nconst ollamaResult = $('Check Ollama').first();\nconst n8nResult = $('Check n8n').first();\nconst webUiResult = $('Check Open WebUI').first();\n\n// Determine up/down for each service\nconst ollamaUp = !ollamaResult.json.error && (ollamaResult.json.models !== undefined || ollamaResult.json.statusCode !== undefined);\nconst n8nUp = !n8nResult.json.error && n8nResult.json.json?.status === 'ok';\nconst webUiUp = !webUiResult.json.error && (webUiResult.json.statusCode < 500 || webUiResult.json.statusCode === undefined);\n\n// Use workflow static data to track state between runs\nconst workflowStaticData = $getWorkflowStaticData('global');\nconst prev = workflowStaticData.serviceStates || { ollama: true, n8n: true, webui: true };\n\nconst current = { ollama: ollamaUp, n8n: n8nUp, webui: webUiUp };\n\n// Find state changes\nconst alerts = [];\nconst recoveries = [];\n\nif (prev.ollama && !current.ollama) alerts.push('🔴 *Ollama* is DOWN — agents cannot respond');\nif (!prev.ollama && current.ollama) recoveries.push('🟢 *Ollama* recovered');\n\nif (prev.n8n && !current.n8n) alerts.push('🔴 *n8n* is DOWN — automation offline');\nif (!prev.n8n && current.n8n) recoveries.push('🟢 *n8n* recovered');\n\nif (prev.webui && !current.webui) alerts.push('🔴 *Open WebUI* is DOWN');\nif (!prev.webui && current.webui) recoveries.push('🟢 *Open WebUI* recovered');\n\n// Persist current state\nworkflowStaticData.serviceStates = current;\n\nconst messages = [...alerts, ...recoveries];\nif (messages.length === 0) {\n  return [{ json: { hasAlert: false } }];\n}\n\nconst text = messages.join('\\n');\nconst isAlert = alerts.length > 0;\n\nreturn [{ json: { hasAlert: true, isAlert, text } }];"
+      },
+      "id": "node-evaluate",
+      "name": "Evaluate Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 320]
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "output": "={{ $json.hasAlert ? 0 : 1 }}",
+        "options": {}
+      },
+      "id": "node-switch",
+      "name": "Has Change?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [860, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: $json.isAlert ? 'C0AL38DHHGC' : 'C0AKT94FE4T', text: $json.text }) }}",
+        "options": {}
+      },
+      "id": "node-post-alert",
+      "name": "Post Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 200]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [[{ "node": "Check Ollama", "type": "main", "index": 0 }]]
+    },
+    "Check Ollama": {
+      "main": [[{ "node": "Check n8n", "type": "main", "index": 0 }]]
+    },
+    "Check n8n": {
+      "main": [[{ "node": "Check Open WebUI", "type": "main", "index": 0 }]]
+    },
+    "Check Open WebUI": {
+      "main": [[{ "node": "Evaluate Health", "type": "main", "index": 0 }]]
+    },
+    "Evaluate Health": {
+      "main": [[{ "node": "Has Change?", "type": "main", "index": 0 }]]
+    },
+    "Has Change?": {
+      "main": [
+        [{ "node": "Post Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

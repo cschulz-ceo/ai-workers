@@ -1,0 +1,184 @@
+{
+  "name": "Tasks Channel Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-tasks",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "slack-tasks"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Route task events — handles both url_verification and app_mention in tasks-* channels\nconst body = $input.first().json.body || {};\nconst eventType = body.type || '';\n\nif (eventType === 'url_verification') {\n  return [{ json: { route: 'challenge', challenge: body.challenge || '' } }];\n}\n\nconst event = body.event || {};\nif (event.type !== 'app_mention' && event.type !== 'message') {\n  return [{ json: { route: 'ignore' } }];\n}\n\n// Skip bot messages and retries\nif (event.bot_id || event.subtype) {\n  return [{ json: { route: 'ignore' } }];\n}\n\nconst channelId = event.channel || '';\nconst userId = event.user || '';\nconst rawText = event.text || '';\nconst ts = event.ts || event.event_ts || '';\n\n// Only handle tasks-* channels\nconst TASKS_CHANNELS = {\n  'C0AKXJSTRV4': 'kevin',\n  'C0ALTUECBU0': 'jason',\n  'C0AKT93TZAP': 'scaachi',\n  'C0AKJ783FF1': 'christian',\n  'C0AKJ787K7H': 'chidi'\n};\n\nconst agent = TASKS_CHANNELS[channelId];\nif (!agent) {\n  return [{ json: { route: 'ignore' } }];\n}\n\nconst MODEL_MAP = {\n  kevin: 'kevin:latest',\n  jason: 'jason:latest',\n  scaachi: 'scaachi:latest',\n  christian: 'christian:latest',\n  chidi: 'chidi:latest'\n};\n\n// Strip bot mention if present\nconst userText = rawText.replace(/<@[A-Z0-9]+>/g, '').trim();\n\n// Parse structured TASK format if present\nconst taskMatch = userText.match(/TASK:\\s*(.+?)(?=\\nCONTEXT:|\\nPRIORITY:|\\nDEADLINE:|$)/is);\nconst contextMatch = userText.match(/CONTEXT:\\s*(.+?)(?=\\nTASK:|\\nPRIORITY:|\\nDEADLINE:|$)/is);\nconst priorityMatch = userText.match(/PRIORITY:\\s*(\\w+)/i);\n\nlet taskTitle = '';\nlet taskContext = '';\nlet priority = 'normal';\nlet isStructured = false;\n\nif (taskMatch) {\n  isStructured = true;\n  taskTitle = taskMatch[1].trim();\n  taskContext = contextMatch ? contextMatch[1].trim() : '';\n  priority = priorityMatch ? priorityMatch[1].toLowerCase() : 'normal';\n}\n\n// Build the prompt for the agent\nlet prompt;\nif (isStructured) {\n  prompt = `You have been assigned a task.\\n\\nTASK: ${taskTitle}${taskContext ? '\\n\\nCONTEXT: ' + taskContext : ''}\\n\\nPriority: ${priority}\\n\\nPlease provide a thorough response addressing this task. Structure your answer clearly.`;\n} else {\n  prompt = userText;\n}\n\nreturn [{ json: {\n  route: 'task',\n  channelId,\n  userId,\n  rawText,\n  userText,\n  prompt,\n  ts,\n  agent,\n  model: MODEL_MAP[agent],\n  isStructured,\n  taskTitle,\n  priority\n} }];"
+      },
+      "id": "node-router",
+      "name": "Route Task",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "output": "={{ $json.route === 'challenge' ? 0 : $json.route === 'task' ? 1 : 2 }}",
+        "options": {}
+      },
+      "id": "node-switch",
+      "name": "Switch Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ challenge: $json.challenge }) }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-challenge",
+      "name": "Return Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [860, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": true}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-ack",
+      "name": "Ack Task",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": true}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-ack-ignore",
+      "name": "Ack Ignore",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [860, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer REDACTED_SLACK_BOT_TOKEN" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: $('Route Task').first().json.channelId, thread_ts: $('Route Task').first().json.ts, text: ':hourglass_flowing_sand: *' + $('Route Task').first().json.agent + '* is working on this...' }) }}",
+        "options": {}
+      },
+      "id": "node-thinking",
+      "name": "Post Thinking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $('Route Task').first().json.model, messages: [{ role: 'user', content: $('Route Task').first().json.prompt }], stream: false }) }}",
+        "options": { "timeout": 300000 }
+      },
+      "id": "node-ollama",
+      "name": "Call Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ollamaResp = $input.first().json;\nconst task = $('Route Task').first().json;\n\nconst content = ollamaResp.message?.content || 'No response.';\nconst MAX = 2800;\nconst truncated = content.length > MAX\n  ? content.slice(0, MAX) + '\\n_[truncated — use /ai for longer responses]_'\n  : content;\n\n// Header differs for structured tasks vs freeform\nconst header = task.isStructured\n  ? `:white_check_mark: *${task.agent}* completed task: _${task.taskTitle.slice(0,60)}_`\n  : `:robot_face: *${task.agent}* responding to <@${task.userId}>`;\n\nreturn [{ json: {\n  channelId: task.channelId,\n  thread_ts: task.ts,\n  payload: JSON.stringify({\n    channel: task.channelId,\n    thread_ts: task.ts,\n    blocks: [\n      { type: 'context', elements: [{ type: 'mrkdwn', text: header }] },\n      { type: 'section', text: { type: 'mrkdwn', text: truncated } }\n    ]\n  })\n}}];"
+      },
+      "id": "node-format",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer REDACTED_SLACK_BOT_TOKEN" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.payload }}",
+        "options": {}
+      },
+      "id": "node-post",
+      "name": "Post Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Route Task", "type": "main", "index": 0 }]]
+    },
+    "Route Task": {
+      "main": [[{ "node": "Switch Route", "type": "main", "index": 0 }]]
+    },
+    "Switch Route": {
+      "main": [
+        [{ "node": "Return Challenge", "type": "main", "index": 0 }],
+        [{ "node": "Ack Task", "type": "main", "index": 0 }],
+        [{ "node": "Ack Ignore", "type": "main", "index": 0 }]
+      ]
+    },
+    "Ack Task": {
+      "main": [[{ "node": "Post Thinking", "type": "main", "index": 0 }]]
+    },
+    "Post Thinking": {
+      "main": [[{ "node": "Call Ollama", "type": "main", "index": 0 }]]
+    },
+    "Call Ollama": {
+      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
+    },
+    "Format Response": {
+      "main": [[{ "node": "Post Response", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

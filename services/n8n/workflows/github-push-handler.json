@@ -1,0 +1,98 @@
+{
+  "name": "GitHub Push Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github-push",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "github-push"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\n\n// Only handle push events (ignore pings, PRs, etc.)\nconst eventType = $input.first().json.headers?.['x-github-event'] || '';\nif (eventType === 'ping') {\n  return [{ json: { route: 'ping' } }];\n}\nif (eventType !== 'push' && eventType !== '') {\n  return [{ json: { route: 'ignore' } }];\n}\n\nconst repo = body.repository?.name || 'unknown';\nconst repoFullName = body.repository?.full_name || repo;\nconst branch = (body.ref || '').replace('refs/heads/', '');\nconst pusher = body.pusher?.name || body.sender?.login || 'unknown';\nconst compareUrl = body.compare || '';\nconst commits = body.commits || [];\n\n// Skip branch deletes\nif (body.deleted) {\n  return [{ json: { route: 'ignore' } }];\n}\n\n// Format commit list (max 5)\nconst MAX_COMMITS = 5;\nconst commitLines = commits.slice(0, MAX_COMMITS).map(c => {\n  const msg = (c.message || '').split('\\n')[0].slice(0, 72);\n  const sha = (c.id || '').slice(0, 7);\n  const author = c.author?.name || pusher;\n  return `  \\`${sha}\\` ${msg} — _${author}_`;\n});\n\nif (commits.length > MAX_COMMITS) {\n  commitLines.push(`  _...and ${commits.length - MAX_COMMITS} more_`);\n}\n\n// Files changed summary\nconst allFiles = commits.flatMap(c => [\n  ...(c.added || []),\n  ...(c.modified || []),\n  ...(c.removed || [])\n]);\nconst uniqueFiles = [...new Set(allFiles)];\nconst filesSummary = uniqueFiles.length <= 4\n  ? uniqueFiles.map(f => `\\`${f}\\``).join(', ')\n  : `${uniqueFiles.slice(0,3).map(f => `\\`${f}\\``).join(', ')} +${uniqueFiles.length - 3} more`;\n\nconst commitWord = commits.length === 1 ? 'commit' : 'commits';\n\nconst message = [\n  `:github: *Push to \\`${repoFullName}\\`* — branch \\`${branch}\\``,\n  `*${commits.length} ${commitWord}* by *${pusher}*${compareUrl ? ` | <${compareUrl}|view diff>` : ''}`,\n  ``,\n  commitLines.join('\\n'),\n  uniqueFiles.length > 0 ? `\\n*Files:* ${filesSummary}` : ''\n].filter(Boolean).join('\\n');\n\nreturn [{ json: { route: 'push', message } }];"
+      },
+      "id": "node-parse",
+      "name": "Parse Push Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "output": "={{ $json.route === 'push' ? 0 : 1 }}",
+        "options": {}
+      },
+      "id": "node-switch",
+      "name": "Is Push?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: 'C0AKZLGHQE6', blocks: [{ type: 'section', text: { type: 'mrkdwn', text: $json.message } }] }) }}",
+        "options": {}
+      },
+      "id": "node-post",
+      "name": "Post to ops-updates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": true}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-ack-ignore",
+      "name": "Ack",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [860, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Parse Push Event", "type": "main", "index": 0 }]]
+    },
+    "Parse Push Event": {
+      "main": [[{ "node": "Is Push?", "type": "main", "index": 0 }]]
+    },
+    "Is Push?": {
+      "main": [
+        [{ "node": "Post to ops-updates", "type": "main", "index": 0 }],
+        [{ "node": "Ack", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}
