@@ -1,0 +1,46 @@
+# Secrets & credentials
+*.env
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
+*.p12
+wireguard/*.conf
+!wireguard/*.conf.example
+
+# WireGuard private keys
+configs/network/wg*.conf
+!configs/network/wg*.conf.example
+
+# Node / n8n
+node_modules/
+.n8n/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
+dist/
+build/
+*.tmp
+
+# Docker volumes (local bind mounts - not tracked)
+data/
+volumes/
