@@ -1,5 +1,5 @@
 # Biulatech AI Workers — Session Context File
-**Last updated:** 2026-03-12 (session 3)
+**Last updated:** 2026-03-12 (session 4)
 **Purpose:** Context retention across Claude sessions. Update this file at the end of each working session.
 
 ---
@@ -66,7 +66,7 @@
 | Ops Service Monitor | hKRONxaLSsSfVjO4 | 2026-03-11 | Scheduled health checks → #ops-alerts |
 | Slack Command Handler v2 | VqmllB5WdHsKmntj | **2026-03-12** | Routes /ai /image /video /enhance /news /pm |
 | Slack Diagnose Handler | QCrmHKpu1KktTK1M | 2026-03-11 | /ai-diagnose → 5 health checks → report |
-| Slack Events Receiver | f5rTNCSNGXwKiwvE | **2026-03-12** | app_mention + #the-council → route → reply/council |
+| Slack Events Receiver | f5rTNCSNGXwKiwvE | **2026-03-12** | app_mention + #the-council + TASK: → route → reply/council/task-handler |
 | Slack Status Handler | KxnpgKyTLMAd4Ygs | 2026-03-11 | /ai-status → health check → #ops-status |
 | Tasks Channel Handler | i1TOhKVyXkLXD01W | 2026-03-11 | #tasks-* messages → Linear issue creation |
 | The Council — Unified Counsel Router | counsel-router-001 | **2026-03-12** | #the-council → sequential 4-member deliberation ✅ TESTED |
@@ -143,8 +143,13 @@ After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhanc
 - The Council end-to-end: routing fixed (Slack Events Receiver → /webhook/the-council), JS Task Runner sandbox workarounds applied, `NODE_FUNCTION_ALLOW_BUILTIN=*` added — tested 2026-03-12 ✅
 - Webhook validation: 10/10 paths returning 200/202 as of 2026-03-12 ✅
 - News Article Generator: activated and fixed (responseMode, Post to Slack URL, auth) 2026-03-12 ✅
-- All 13 active workflows exported to git: `services/n8n/workflows/` — 2026-03-12 ✅
+- All active workflows exported to git: `services/n8n/workflows/` — 2026-03-12 ✅
 - docker-compose.yml added to repo: `services/n8n/docker-compose.yml` — 2026-03-12 ✅
+- Agent → Linear update loop: wired — TASK: messages in #tasks-* → Events Receiver → /webhook/slack-tasks → full Ollama+Linear+studio pipeline ✅ (2026-03-12)
+- jason.Modelfile path corrected: ~/ai-workers → ~/ai-workers-1, re-pushed to Ollama ✅
+- llama3.1:70b alias: confirmed present (same digest as full model name) ✅
+- Backup cron + export cron: confirmed in crontab (3am backup, 2am export) ✅
+- Stale top-level workflows/ stubs retired; canonical location is services/n8n/workflows/ ✅
 
 ---
 
@@ -167,15 +172,16 @@ After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhanc
 
 - [ ] **Download ComfyUI checkpoint** → enables /image /video /enhance (`scripts/download-comfyui-models.sh`)
 - [ ] **Activate ComfyUI n8n workflows** (3 workflows: t2i, t2v, enhance) — after model download
-- [ ] **Fix /pm model name** — run `ollama cp llama3.1:70b-instruct-q5_K_M llama3.1:70b` then test `/pm` end-to-end
+- [ ] **Test /pm end-to-end** — run `/pm Create test issue` in Slack → expect Linear issue + Slack confirm
+- [ ] **Test Tasks Channel Handler** — post `TASK: [task]` in #tasks-kevin → expect Ollama → Linear issue → #studio-blueprint + thread reply
 - [ ] **Test Weekly News Digest** — re-trigger in n8n UI, verify Slack post in #ops-digest
-- [ ] **Add Grafana alert rule** for GPU >90% → n8n webhook → #ops-alerts
-- [ ] **Agent → Linear update loop** — agent completes task → updates Linear issue → posts to #studio-blueprint / #studio-forge / #studio-quill
-- [ ] **Set up backup cron** — `sudo apt install sqlite3` then add cron for `scripts/maintenance/backup-n8n.sh`
+- [ ] **Install sqlite3** — `sudo apt install sqlite3` → enables full SQLite backup in `backup-n8n.sh`
+- [ ] **Add Grafana alert rule** for GPU >90% → n8n webhook → #ops-alerts (Grafana UI only)
 - [ ] **Update n8n credentials** — workflows show `CONFIGURE_IN_N8N_CREDENTIALS` for bot token (n8n UI → Credentials)
+- [ ] **Download ComfyUI checkpoint** → enables /image /video /enhance (`scripts/download-comfyui-models.sh`)
+- [ ] **Activate ComfyUI n8n workflows** (3 workflows: t2i, t2v, enhance) — after model download
 - [ ] **Domain setup** — n8n.biulatech.com (biulatech.com on Wix; see ADR-016 for migration path)
-- [ ] **Streaming responses** — chunk long Ollama outputs into multiple Slack messages
-- [ ] **Merge worktree branch** → `claude/admiring-yonath` → main → set up cron jobs
+- [ ] **Merge worktree branch** → `claude/admiring-yonath` → main
 
 ---
 
@@ -206,4 +212,5 @@ After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhanc
 | 2026-03-11 | Infrastructure, ngrok, personalities, Slack channels, slash commands, /ai → Ollama, /ai-status, dual-channel ops posting, events receiver, /ai-diagnose, daily digest, GitHub push handler, Linear integration (replaced Plane), council router |
 | 2026-03-12 | Rebuilt Council deliberation (sequential engine, thread-aware). Set up Grafana dashboard. Activated Weekly News Digest. Activated Linear AI Project Manager. Added /pm to Slack Command Handler. Identified: Ollama 127.0.0.1 binding is the primary blocker. |
 | 2026-03-12 | Created systemd units for Ollama override (OLLAMA_HOST=0.0.0.0), ngrok, gpu-exporter. Added GPU Prometheus exporter script, backup-n8n.sh, export-workflows.sh. Fixed Mac→Pop!_OS inaccuracies in docs. Scrubbed credentials from ROADMAP.md. Added ADR-011 (Ollama systemd strategy). Standardized studio-* channel naming. Updated decisions.md. |
-| 2026-03-12 | Validated all 10 webhook paths (10/10 passing). Fixed news-article-generator (responseMode, continueOnFail, Post to Slack URL + auth). Added Slack Events Receiver → #the-council routing (Switch Route + Ack Council + Forward to Council nodes). Fixed Council JS Task Runner sandbox issues: Config Set node for $env workaround, replaced $helpers/fetch with require('https') helper, added NODE_FUNCTION_ALLOW_BUILTIN=* to docker-compose. Tested The Council end-to-end — Chidi responded in #the-council ✅. Exported all 13 active workflows + docker-compose to git. |
+| 2026-03-12 | Validated all 10 webhook paths (10/10 passing). Fixed news-article-generator (responseMode, continueOnFail, Post to Slack URL + auth). Added Slack Events Receiver → #the-council routing (Switch Route + Ack Council + Forward to Council nodes). Fixed Council JS Task Runner sandbox issues: Config Set node for $env workaround, replaced $helpers/fetch with require('https') helper, added NODE_FUNCTION_ALLOW_BUILTIN=* to docker-compose. Tested The Council end-to-end — Chidi responded in #the-council ✅. Exported all active workflows + docker-compose to git. |
+| 2026-03-12 | Re-evaluated plan against actual repo state. Fixed jason.Modelfile path (~/ai-workers → ~/ai-workers-1), retired stale top-level workflows/ stubs (3 JSON files), added services/n8n/workflows/README.md. Confirmed llama3.1:70b alias + backup/export crons already present. Wired agent→Linear update loop: updated Slack Events Receiver to route TASK: messages in #tasks-* to Tasks Channel Handler (/webhook/slack-tasks) via new Switch[4] → Ack Task → Forward to Tasks nodes. Tasks Channel Handler already had complete Ollama+Linear+studio flow. |
