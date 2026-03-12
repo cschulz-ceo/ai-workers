@@ -1,6 +1,7 @@
 #!/bin/bash
 # ComfyUI Model Downloader — with resume support
-# Run directly: bash ~/ai-workers/scripts/download-comfyui-models.sh
+# Run directly: bash ~/ai-workers-1/scripts/download-comfyui-models.sh
+# For gated repos (FLUX.1-schnell): HF_TOKEN=<your_token> bash ~/ai-workers-1/scripts/download-comfyui-models.sh
 # Logs: ~/ComfyUI/download_progress.log
 set -euo pipefail
 
@@ -43,10 +44,12 @@ download_hf() {
     $VENV -c "
 from huggingface_hub import hf_hub_download
 import os
+token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN') or None
 path = hf_hub_download(
     repo_id='$repo',
     filename='$filename',
     local_dir='$dest_dir',
+    token=token,
 )
 print(f'  Saved to: {path}')
 " 2>&1 | grep -v UserWarning | grep -v "warnings.warn" | tee -a "$LOG" || log "  ERROR on $label"
