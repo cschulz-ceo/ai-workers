@@ -150,6 +150,7 @@ After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhanc
 - llama3.1:70b alias: confirmed present (same digest as full model name) ✅
 - Backup cron + export cron: confirmed in crontab (3am backup, 2am export) ✅
 - Stale top-level workflows/ stubs retired; canonical location is services/n8n/workflows/ ✅
+- sqlite3 installed; backup script verified — 11MB SQLite + .env captured to /home/biulatech/backups/n8n/ ✅
 
 ---
 
@@ -173,15 +174,13 @@ After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhanc
 - [ ] **Download ComfyUI checkpoint** → enables /image /video /enhance (`scripts/download-comfyui-models.sh`)
 - [ ] **Activate ComfyUI n8n workflows** (3 workflows: t2i, t2v, enhance) — after model download
 - [ ] **Test /pm end-to-end** — run `/pm Create test issue` in Slack → expect Linear issue + Slack confirm
-- [ ] **Test Tasks Channel Handler** — post `TASK: [task]` in #tasks-kevin → expect Ollama → Linear issue → #studio-blueprint + thread reply
-- [ ] **Test Weekly News Digest** — re-trigger in n8n UI, verify Slack post in #ops-digest
-- [ ] **Install sqlite3** — `sudo apt install sqlite3` → enables full SQLite backup in `backup-n8n.sh`
-- [ ] **Add Grafana alert rule** for GPU >90% → n8n webhook → #ops-alerts (Grafana UI only)
-- [ ] **Update n8n credentials** — workflows show `CONFIGURE_IN_N8N_CREDENTIALS` for bot token (n8n UI → Credentials)
+- [ ] **Test Tasks Channel Handler** — post `TASK: write a hello world in Python` in #tasks-kevin → expect Ollama → Linear issue → #studio-blueprint + thread reply
+- [ ] **Test Weekly News Digest** — re-trigger in n8n UI (Execute button), verify Slack post in #ops-digest
+- [ ] **Add Grafana alert rule** for GPU >90% → n8n webhook → #ops-alerts (Grafana UI: Alerting → Alert rules → New)
+- [ ] **Update n8n credentials** — workflows show `CONFIGURE_IN_N8N_CREDENTIALS` for bot token (n8n UI → Credentials → Slack Bot Token)
 - [ ] **Download ComfyUI checkpoint** → enables /image /video /enhance (`scripts/download-comfyui-models.sh`)
-- [ ] **Activate ComfyUI n8n workflows** (3 workflows: t2i, t2v, enhance) — after model download
+- [ ] **Activate ComfyUI n8n workflows** — after model download (t2i, t2v, enhance — activate in n8n UI)
 - [ ] **Domain setup** — n8n.biulatech.com (biulatech.com on Wix; see ADR-016 for migration path)
-- [ ] **Merge worktree branch** → `claude/admiring-yonath` → main
 
 ---
 
