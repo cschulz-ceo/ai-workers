@@ -48,10 +48,10 @@ Full Slack ↔ n8n communication layer.
 1. n8n → Credentials → Add Credential → search "Header Auth"
 2. Name: `Slack Bot Token`
    - Name: `Authorization`
-   - Value: `Bearer REDACTED_SLACK_BOT_TOKEN`
+   - Value: `Bearer $SLACK_BOT_TOKEN` (get value from `/home/biulatech/n8n/.env`)
 3. Add another → "Generic Credential"
 4. Name: `Slack Signing Secret`
-   - Value: `REDACTED_SIGNING_SECRET`
+   - Value: `$SLACK_SIGNING_SECRET` (get value from `/home/biulatech/n8n/.env`)
 
 ---
 
@@ -147,15 +147,15 @@ PRIORITY: high
 ---
 
 ## Phase 6 — Generative Output Feeds 🔲
-Auto-populate `#gen-*` channels with agent outputs.
+Auto-populate `#studio-*` channels with agent outputs.
 
 | Channel | Source | Trigger |
 |---------|--------|---------|
-| #gen-images | ComfyUI | /ai-draw command |
-| #gen-architecture | Kevin | Architecture task completion |
-| #gen-code | Jason | Code task completion |
-| #gen-content | Scaachi | Content task completion |
-| #gen-video | Future | Not yet implemented |
+| #studio-canvas | ComfyUI | /image command |
+| #studio-reels | ComfyUI | /video command |
+| #studio-blueprint | Kevin | Architecture task completion |
+| #studio-forge | Jason | Code task completion |
+| #studio-quill | Scaachi | Content task completion |
 
 ---
 
@@ -165,7 +165,7 @@ Move from ngrok free tier to proper domain.
 | Item | Status | Notes |
 |------|--------|-------|
 | n8n.biulatech.com CNAME in Wix DNS | ⏳ | Wix: Manage Domain → DNS Records |
-| Cloudflare proxy for n8n subdomain | ⏳ | See ADR-015 |
+| Cloudflare proxy for n8n subdomain | ⏳ | See ADR-016 |
 | n8n behind reverse proxy (caddy/nginx) | ⏳ | TLS termination |
 | n8n auth enabled | ⏳ | N8N_BASIC_AUTH_ACTIVE=true |
 | Automated backups (n8n_data, .env) | ⏳ | Cron → rclone → cloud |

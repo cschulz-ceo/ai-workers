@@ -1,0 +1,50 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+
+  # ── System metrics via Node Exporter ──────────────────────────────────────
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # ── Prometheus self-monitoring ─────────────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ── HTTP probe: all AI Worker services ───────────────────────────────────
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://host.docker.internal:5678/healthz          # n8n
+          - http://host.docker.internal:11434/api/tags        # Ollama (needs OLLAMA_HOST=0.0.0.0)
+          - http://host.docker.internal:8080                  # Open WebUI
+          - http://host.docker.internal:8188/system_stats     # ComfyUI
+          - http://host.docker.internal:4040/api/tunnels      # ngrok (needs web_addr=0.0.0.0:4040)
+          - http://host.docker.internal:9090/-/healthy        # Prometheus self
+          - http://host.docker.internal:3001/api/health       # Grafana self
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # ── NVIDIA GPU metrics ────────────────────────────────────────────────────
+  # Requires: scripts/maintenance/gpu-exporter.py running as a systemd service
+  # Install: sudo systemctl enable --now gpu-exporter
+  - job_name: 'gpu-exporter'
+    static_configs:
+      - targets: ['host.docker.internal:9835']
+
+  # ── Blackbox self-monitoring ───────────────────────────────────────────────
+  - job_name: 'blackbox-exporter'
+    static_configs:
+      - targets: ['blackbox-exporter:9115']

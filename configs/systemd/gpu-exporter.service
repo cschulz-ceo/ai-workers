@@ -1,0 +1,16 @@
+[Unit]
+Description=NVIDIA GPU Prometheus Exporter
+Documentation=https://github.com/cschulz-ceo/ai-workers
+After=network.target
+
+[Service]
+User=biulatech
+ExecStart=/usr/bin/python3 /home/biulatech/ai-workers-1/scripts/maintenance/gpu-exporter.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gpu-exporter
+
+[Install]
+WantedBy=multi-user.target

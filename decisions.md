@@ -209,12 +209,39 @@ Use ngrok (free tier) to expose n8n's webhook endpoint publicly.
 - ngrok account required (free); authtoken stored in `~/n8n/.env` (gitignored)
 - Cloudflare Tunnel remains the long-term preference once a domain is registered
 
+## ADR-011: Ollama systemd Override Strategy
+
+**Date**: 2026-03-12
+**Status**: Accepted
+
+**Context**
+Ollama must bind to `0.0.0.0` so Docker containers (specifically n8n) can reach it via `host.docker.internal`. Ollama's installer places a base unit at `/etc/systemd/system/ollama.service` that sets `OLLAMA_HOST` incorrectly or not at all. Direct edits to the base unit are unsafe because `ollama service install` (run by Ollama upgrades) will overwrite it.
+
+**Decision**
+Add a systemd drop-in override at `/etc/systemd/system/ollama.service.d/override.conf` to set `OLLAMA_HOST=0.0.0.0`, `OLLAMA_KEEP_ALIVE=5m`, and `OLLAMA_FLASH_ATTENTION=1`. Track the override file in this repo at `configs/systemd/ollama.service.d/override.conf`.
+
+**Rationale**
+- Drop-in overrides survive `ollama service install` rewrites of the base unit — systemd merges them automatically
+- A single `Environment=` line in the override sets `OLLAMA_HOST` without touching the base unit
+- `OLLAMA_HOST=0.0.0.0` binding is required for: The Council, /pm, Weekly News Digest, Linear AI Project Manager
+- `OLLAMA_KEEP_ALIVE=5m` releases GPU VRAM after idle, preventing OOM collision with ComfyUI
+- `OLLAMA_FLASH_ATTENTION=1` enables flash attention on RTX 5070 Ti (Ampere+ architecture)
+
+**Re-apply after Ollama upgrade:**
+```bash
+sudo cp configs/systemd/ollama.service.d/override.conf /etc/systemd/system/ollama.service.d/
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+ss -tlnp | grep 11434  # Verify 0.0.0.0:11434
+```
+
+---
+
 ## Future Decisions (Pending)
 
-- [ ] ADR-011: Secrets management strategy (e.g., local Vault vs. env files)
-- [ ] ADR-012: Model selection strategy beyond llama3.1 (quantization, specialization)
-- [ ] ADR-013: ComfyUI workflow versioning approach
-- [ ] ADR-014: Agent skill packaging format
-- [ ] ADR-015: Migrate tunnel to Cloudflare (biulatech.com is registered via Wix — migration
+- [ ] ADR-012: Secrets management strategy (e.g., local Vault vs. env files)
+- [ ] ADR-013: Model selection strategy beyond llama3.1 (quantization, specialization)
+- [ ] ADR-014: ComfyUI workflow versioning approach
+- [ ] ADR-015: Agent skill packaging format
+- [ ] ADR-016: Migrate tunnel to Cloudflare (biulatech.com is registered via Wix — migration
         path is Cloudflare partial/CNAME setup for n8n.biulatech.com without moving Wix
         nameservers, OR migrate Wix site off Wix first for full Cloudflare DNS control)

@@ -23,7 +23,7 @@
 
 | Service | Port | Binding | Status | Notes |
 |---------|------|---------|--------|-------|
-| n8n | 5678 | 0.0.0.0 | ✅ Running | Workflow orchestrator (Docker on Mac) |
+| n8n | 5678 | 0.0.0.0 | ✅ Running | Workflow orchestrator (Docker on Pop!_OS) |
 | Ollama | 11434 | **127.0.0.1 ONLY** | ✅ Running | ⚠️ Must change to 0.0.0.0 — see Blockers |
 | Open WebUI | 8080 | 0.0.0.0 | ✅ Running | Chat UI for Ollama |
 | ComfyUI | 8188 | 0.0.0.0 | ✅ Running | Image/video gen — no model checkpoints yet |
@@ -31,7 +31,7 @@
 | Prometheus | 9090 | 0.0.0.0 | ✅ Running | Metrics backend |
 | ngrok | 4040 | **127.0.0.1 ONLY** | ✅ Running | ⚠️ Web UI not reachable by Docker containers |
 
-**Critical networking note:** n8n runs inside Docker. Docker containers use `host.docker.internal` (resolves to Docker bridge gateway, NOT 127.0.0.1) to reach the Mac host. Ollama must bind to `0.0.0.0` for this to work.
+**Critical networking note:** n8n runs inside Docker. Docker containers use `host.docker.internal` (resolves to Docker bridge gateway, NOT 127.0.0.1) to reach the Pop!_OS host. Ollama must bind to `0.0.0.0` for this to work.
 
 ---
 
@@ -120,12 +120,14 @@
 ## Critical Blockers (User Action Required)
 
 ### 1. 🔴 Ollama binding — blocks Weekly News Digest, Linear PM, Council
-**Fix (Mac terminal):**
+**Fix (Pop!_OS — systemd drop-in override):**
 ```bash
-launchctl setenv OLLAMA_HOST "0.0.0.0"
-# Restart Ollama (quit app and reopen, or kill + restart)
-pkill ollama && sleep 2 && ollama serve
+sudo mkdir -p /etc/systemd/system/ollama.service.d/
+sudo cp configs/systemd/ollama.service.d/override.conf /etc/systemd/system/ollama.service.d/
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+ss -tlnp | grep 11434  # Must show 0.0.0.0:11434
 ```
+The override.conf sets `OLLAMA_HOST=0.0.0.0`. See ADR-011 in decisions.md for why we use a drop-in (Ollama upgrades overwrite the base unit).
 After this, Weekly News Digest and /pm will work; Grafana Ollama probe will go green.
 
 ### 2. 🟠 Linear PM model name mismatch
@@ -171,7 +173,7 @@ Key was added to database, needs n8n restart to take effect.
 - [ ] **Activate ComfyUI n8n workflows** (3 workflows: t2i, t2v, enhance)
 - [ ] **Test /pm end-to-end** after Ollama fix
 - [ ] **Test Weekly News Digest** after Ollama fix (re-run Execute workflow in n8n)
-- [ ] **Agent → Linear update loop** — agent completes task → updates Linear issue → posts to #studio-*
+- [ ] **Agent → Linear update loop** — agent completes task → updates Linear issue → posts to #studio-blueprint / #studio-forge / #studio-quill
 - [ ] **GPU utilization alerts** → #ops-alerts (threshold: >90% for 5 min)
 - [ ] **Export n8n workflows to git** — `ai-workers-1/workflows/` has old stubs; export current workflows
 - [ ] **Domain setup** — n8n.biulatech.com (biulatech.com on Wix; see ADR-015 for migration path)
@@ -206,3 +208,4 @@ Key was added to database, needs n8n restart to take effect.
 |------|-----------|
 | 2026-03-11 | Infrastructure, ngrok, personalities, Slack channels, slash commands, /ai → Ollama, /ai-status, dual-channel ops posting, events receiver, /ai-diagnose, daily digest, GitHub push handler, Linear integration (replaced Plane), council router |
 | 2026-03-12 | Rebuilt Council deliberation (sequential engine, thread-aware). Set up Grafana dashboard. Activated Weekly News Digest. Activated Linear AI Project Manager. Added /pm to Slack Command Handler. Identified: Ollama 127.0.0.1 binding is the primary blocker. |
+| 2026-03-12 | Created systemd units for Ollama override (OLLAMA_HOST=0.0.0.0), ngrok, gpu-exporter. Added GPU Prometheus exporter script, backup-n8n.sh, export-workflows.sh. Fixed Mac→Pop!_OS inaccuracies in docs. Scrubbed credentials from ROADMAP.md. Added ADR-011 (Ollama systemd strategy). Standardized studio-* channel naming. Updated decisions.md. |
