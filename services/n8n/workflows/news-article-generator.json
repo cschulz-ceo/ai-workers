@@ -1,18 +1,22 @@
 {
+  "id": "cf2282e0-c226-4030-8df4-59ec9fb61a7c",
   "name": "News Article Generator",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "news-search",
-        "responseMode": "responseNode",
+        "responseMode": "lastNode",
         "options": {}
       },
       "id": "node-webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "news-search"
     },
     {
@@ -23,7 +27,10 @@
       "name": "Parse Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [420, 300]
+      "position": [
+        420,
+        300
+      ]
     },
     {
       "parameters": {
@@ -48,7 +55,11 @@
       "name": "Ack Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 300]
+      "position": [
+        640,
+        300
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -62,7 +73,10 @@
       "name": "Fetch RSS Feeds",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [860, 300]
+      "position": [
+        860,
+        300
+      ]
     },
     {
       "parameters": {
@@ -72,7 +86,10 @@
       "name": "Parse RSS",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1080, 300]
+      "position": [
+        1080,
+        300
+      ]
     },
     {
       "parameters": {
@@ -99,17 +116,23 @@
       "name": "Summarize with Ollama",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1300, 300]
+      "position": [
+        1300,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Parse Ollama response and format Slack blocks\nconst ollamaResp = $input.first().json;\nconst msgContent = ollamaResp.message?.content || '{}';\nlet articlesData = [];\n\ntry {\n  // Try to extract JSON from the response\n  const jsonMatch = msgContent.match(/\\[\\s*\\{[\\s\\S]*?\\}\\s*\\]/); \n  articlesData = jsonMatch ? JSON.parse(jsonMatch[0]) : $('Parse RSS').first().json.articles;\n} catch (e) {\n  articlesData = $('Parse RSS').first().json.articles;\n}\n\nconst topic = $('Parse RSS').first().json.topic;\n\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':newspaper: Top 5 News Results: ' + topic, emoji: true }\n  },\n  { type: 'divider' }\n];\n\narticlesData.forEach((article, idx) => {\n  blocks.push({\n    type: 'section',\n    text: {\n      type: 'mrkdwn',\n      text: `*<${article.url}|${article.title}>*\\n${article.source} • ${article.date}\\n_${article.summary || article.description}_`\n    }\n  });\n  \n  if (idx < articlesData.length - 1) {\n    blocks.push({ type: 'divider' });\n  }\n});\n\nconst responseUrl = $('Parse Request').first().json.responseUrl;\nreturn [{ json: {\n  responseUrl,\n  blocks\n}}];"
+        "jsCode": "// Parse Ollama response and format Slack blocks\nconst ollamaResp = $input.first().json;\nconst msgContent = ollamaResp.message?.content || '{}';\nlet articlesData = [];\n\ntry {\n  // Try to extract JSON from the response\n  const jsonMatch = msgContent.match(/\\[\\s*\\{[\\s\\S]*?\\}\\s*\\]/); \n  articlesData = jsonMatch ? JSON.parse(jsonMatch[0]) : $('Parse RSS').first().json.articles;\n} catch (e) {\n  articlesData = $('Parse RSS').first().json.articles;\n}\n\nconst topic = $('Parse RSS').first().json.topic;\n\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':newspaper: Top 5 News Results: ' + topic, emoji: true }\n  },\n  { type: 'divider' }\n];\n\narticlesData.forEach((article, idx) => {\n  blocks.push({\n    type: 'section',\n    text: {\n      type: 'mrkdwn',\n      text: `*<${article.url}|${article.title}>*\\n${article.source} \u2022 ${article.date}\\n_${article.summary || article.description}_`\n    }\n  });\n  \n  if (idx < articlesData.length - 1) {\n    blocks.push({ type: 'divider' });\n  }\n});\n\nconst responseUrl = $('Parse Request').first().json.responseUrl;\nreturn [{ json: {\n  responseUrl,\n  blocks\n}}];"
       },
       "id": "node-format",
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1520, 300]
+      "position": [
+        1520,
+        300
+      ]
     },
     {
       "parameters": {
@@ -134,7 +157,10 @@
       "name": "Post to Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1740, 300]
+      "position": [
+        1740,
+        300
+      ]
     }
   ],
   "connections": {
@@ -219,5 +245,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "active": false
+  "active": true
 }

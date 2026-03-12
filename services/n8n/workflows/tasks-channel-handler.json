@@ -1,103 +1,112 @@
 {
+  "id": "i1TOhKVyXkLXD01W",
   "name": "Tasks Channel Handler",
   "nodes": [
     {
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
       "parameters": {
         "httpMethod": "POST",
         "path": "slack-tasks",
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "node-webhook",
-      "name": "Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        200,
-        300
-      ],
-      "webhookId": "slack-tasks"
+      "webhookId": "sl4ck-t4sks-4000-8000-t4sksch4nn3l"
     },
     {
-      "parameters": {
-        "jsCode": "// Route task events \u2014 handles both url_verification and app_mention in tasks-* channels\nconst body = $input.first().json.body || {};\nconst eventType = body.type || '';\n\nif (eventType === 'url_verification') {\n  return [{ json: { route: 'challenge', challenge: body.challenge || '' } }];\n}\n\nconst event = body.event || {};\nif (event.type !== 'app_mention' && event.type !== 'message') {\n  return [{ json: { route: 'ignore' } }];\n}\n\n// Skip bot messages and retries\nif (event.bot_id || event.subtype) {\n  return [{ json: { route: 'ignore' } }];\n}\n\nconst channelId = event.channel || '';\nconst userId = event.user || '';\nconst rawText = event.text || '';\nconst ts = event.ts || event.event_ts || '';\n\n// Only handle tasks-* channels\nconst TASKS_CHANNELS = {\n  'C0AKXJSTRV4': 'kevin',\n  'C0ALTUECBU0': 'jason',\n  'C0AKT93TZAP': 'scaachi',\n  'C0AKJ783FF1': 'christian',\n  'C0AKJ787K7H': 'chidi'\n};\n\nconst agent = TASKS_CHANNELS[channelId];\nif (!agent) {\n  return [{ json: { route: 'ignore' } }];\n}\n\nconst MODEL_MAP = {\n  kevin: 'kevin:latest',\n  jason: 'jason:latest',\n  scaachi: 'scaachi:latest',\n  christian: 'christian:latest',\n  chidi: 'chidi:latest'\n};\n\n// Strip bot mention if present\nconst userText = rawText.replace(/<@[A-Z0-9]+>/g, '').trim();\n\n// Parse structured TASK format if present\nconst taskMatch = userText.match(/TASK:\\s*(.+?)(?=\\nCONTEXT:|\\nPRIORITY:|\\nDEADLINE:|$)/is);\nconst contextMatch = userText.match(/CONTEXT:\\s*(.+?)(?=\\nTASK:|\\nPRIORITY:|\\nDEADLINE:|$)/is);\nconst priorityMatch = userText.match(/PRIORITY:\\s*(\\w+)/i);\n\nlet taskTitle = '';\nlet taskContext = '';\nlet priority = 'normal';\nlet isStructured = false;\n\nif (taskMatch) {\n  isStructured = true;\n  taskTitle = taskMatch[1].trim();\n  taskContext = contextMatch ? contextMatch[1].trim() : '';\n  priority = priorityMatch ? priorityMatch[1].toLowerCase() : 'normal';\n}\n\n// Build the prompt for the agent\nlet prompt;\nif (isStructured) {\n  prompt = `You have been assigned a task.\\n\\nTASK: ${taskTitle}${taskContext ? '\\n\\nCONTEXT: ' + taskContext : ''}\\n\\nPriority: ${priority}\\n\\nPlease provide a thorough response addressing this task. Structure your answer clearly.`;\n} else {\n  prompt = userText;\n}\n\nreturn [{ json: {\n  route: 'task',\n  channelId,\n  userId,\n  rawText,\n  userText,\n  prompt,\n  ts,\n  agent,\n  model: MODEL_MAP[agent],\n  isStructured,\n  taskTitle,\n  priority\n} }];"
-      },
       "id": "node-router",
       "name": "Route Task",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        420,
+        220,
         300
-      ]
+      ],
+      "parameters": {
+        "jsCode": "\n// Route task events \u2014 handles both url_verification and app_mention in tasks-* channels\nconst body = $input.first().json.body || {};\nconst eventType = body.type || '';\n\nif (eventType === 'url_verification') {\n  return [{ json: { route: 'challenge', challenge: body.challenge || '' } }];\n}\n\nconst event = body.event || {};\nif (event.type !== 'app_mention' && event.type !== 'message') {\n  return [{ json: { route: 'ignore' } }];\n}\n\n// Skip bot messages and retries\nif (event.bot_id || event.subtype) {\n  return [{ json: { route: 'ignore' } }];\n}\n\nconst channelId = event.channel || '';\nconst userId    = event.user    || '';\nconst rawText   = event.text    || '';\nconst ts        = event.ts || event.event_ts || '';\n\n// Only handle tasks-* channels\nconst TASKS_CHANNELS = {\n  'C0AKXJSTRV4': 'kevin',\n  'C0ALTUECBU0': 'jason',\n  'C0AKT93TZAP': 'scaachi',\n  'C0AKJ783FF1': 'christian',\n  'C0AKJ787K7H': 'chidi'\n};\n\nconst agent = TASKS_CHANNELS[channelId];\nif (!agent) {\n  return [{ json: { route: 'ignore' } }];\n}\n\nconst MODEL_MAP = {\n  kevin:     'kevin:latest',\n  jason:     'jason:latest',\n  scaachi:   'scaachi:latest',\n  christian: 'christian:latest',\n  chidi:     'chidi:latest'\n};\n\n// Agent \u2192 output studio channel\nconst STUDIO_CHANNELS = {\n  kevin:     'C0AKW7WT085',  // #studio-blueprint \u2014 architecture & design\n  jason:     'C0AL38FJ7SQ',  // #studio-forge \u2014 code & scripts\n  scaachi:   'C0AKJ798RJT',  // #studio-quill \u2014 content & copy\n  christian: 'C0AKZLGFH50',  // #ops-intel \u2014 strategy & business\n  chidi:     'C0AKW7WT085',  // #studio-blueprint \u2014 research & analysis\n};\n\n// Strip bot mention if present\nconst userText = rawText.replace(/<@[A-Z0-9]+>/g, '').trim();\n\n// Parse structured TASK format if present\nconst taskMatch     = userText.match(/TASK:\\s*(.+?)(?=\\nCONTEXT:|\\nPRIORITY:|\\nDEADLINE:|$)/is);\nconst contextMatch  = userText.match(/CONTEXT:\\s*(.+?)(?=\\nTASK:|\\nPRIORITY:|\\nDEADLINE:|$)/is);\nconst priorityMatch = userText.match(/PRIORITY:\\s*(\\w+)/i);\n\nlet taskTitle    = '';\nlet taskContext  = '';\nlet priority     = 'normal';\nlet isStructured = false;\n\nif (taskMatch) {\n  isStructured  = true;\n  taskTitle     = taskMatch[1].trim();\n  taskContext   = contextMatch ? contextMatch[1].trim() : '';\n  priority      = priorityMatch ? priorityMatch[1].toLowerCase() : 'normal';\n}\n\nlet prompt;\nif (isStructured) {\n  prompt = `You have been assigned a task.\\n\\nTASK: ${taskTitle}${taskContext ? '\\n\\nCONTEXT: ' + taskContext : ''}\\n\\nPlease complete this task thoroughly. Provide your full response, analysis, or output.`;\n} else {\n  prompt = userText;\n}\n\nreturn [{ json: {\n  route:         'task',\n  agent,\n  model:         MODEL_MAP[agent],\n  studioChannel: STUDIO_CHANNELS[agent],\n  channelId,\n  userId,\n  ts,\n  userText,\n  taskTitle,\n  taskContext,\n  priority,\n  isStructured,\n  prompt\n}}];\n"
+      }
     },
     {
+      "id": "node-switch",
+      "name": "Switch Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        440,
+        300
+      ],
       "parameters": {
         "mode": "expression",
         "output": "={{ $json.route === 'challenge' ? 0 : $json.route === 'task' ? 1 : 2 }}",
         "options": {}
-      },
-      "id": "node-switch",
-      "name": "Switch Route",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 2,
-      "position": [
-        640,
-        300
-      ]
+      }
     },
     {
+      "id": "node-challenge",
+      "name": "Return Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        660,
+        100
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify({ challenge: $json.challenge }) }}",
         "options": {
           "responseCode": 200
         }
-      },
-      "id": "node-challenge",
-      "name": "Return Challenge",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        860,
-        120
-      ]
+      }
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\"ok\": true}",
-        "options": {
-          "responseCode": 200
-        }
-      },
       "id": "node-ack",
       "name": "Ack Task",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        860,
+        660,
         300
-      ]
-    },
-    {
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "{\"ok\": true}",
         "options": {
           "responseCode": 200
         }
-      },
+      }
+    },
+    {
       "id": "node-ack-ignore",
       "name": "Ack Ignore",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        860,
-        480
-      ]
+        660,
+        500
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": true}",
+        "options": {
+          "responseCode": 200
+        }
+      }
     },
     {
+      "id": "node-thinking",
+      "name": "Post Thinking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        880,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "https://slack.com/api/chat.postMessage",
@@ -106,7 +115,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer CONFIGURE_IN_N8N_CREDENTIALS"
+              "value": "={{ $env.SLACK_BOT_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -119,17 +128,17 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ channel: $('Route Task').first().json.channelId, thread_ts: $('Route Task').first().json.ts, text: ':hourglass_flowing_sand: *' + $('Route Task').first().json.agent + '* is working on this...' }) }}",
         "options": {}
-      },
-      "id": "node-thinking",
-      "name": "Post Thinking",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1080,
-        300
-      ]
+      }
     },
     {
+      "id": "node-ollama",
+      "name": "Call Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1100,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "http://host.docker.internal:11434/api/chat",
@@ -149,30 +158,30 @@
         "options": {
           "timeout": 300000
         }
-      },
-      "id": "node-ollama",
-      "name": "Call Ollama",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1300,
-        300
-      ]
+      }
     },
     {
-      "parameters": {
-        "jsCode": "\n// Convert common markdown to Slack mrkdwn\nfunction mdToMrkdwn(text) {\n  return text\n    .replace(/^#{1,6}\\s+(.+)$/gm, '*$1*')      // headings \u2192 bold\n    .replace(/\\*\\*(.+?)\\*\\*/gs, '*$1*')          // **bold** \u2192 *bold*\n    .replace(/__(.+?)__/gs, '*$1*')              // __bold__ \u2192 *bold*\n    .replace(/~~(.+?)~~/gs, '~$1~')             // ~~strike~~ \u2192 ~strike~\n    .replace(/\\n{3,}/g, '\\n\\n')                  // collapse excess blank lines\n    .trim();\n}\n\n// Agent emoji mapping\nconst AGENT_EMOJI = {\n  kevin: ':briefcase:',\n  jason: ':scales:',\n  scaachi: ':pencil:',\n  christian: ':compass:',\n  chidi: ':bulb:'\n};\n\nconst ollamaResp = $input.first().json;\nconst task = $('Route Task').first().json;\n\nconst content = ollamaResp.message?.content || 'No response.';\nconst MAX = 2800;\nconst formatted = mdToMrkdwn(content);\nconst truncated = formatted.length > MAX\n  ? formatted.slice(0, MAX) + '\\n_[truncated \u2014 use /ai for longer responses]_'\n  : formatted;\n\nconst emoji = AGENT_EMOJI[task.agent] || ':robot_face:';\nconst blocks = [];\n\nif (task.isStructured) {\n  blocks.push({\n    type: 'header',\n    text: { type: 'plain_text', text: ':white_check_mark: ' + task.agent + ' \u2014 task complete', emoji: true }\n  });\n  blocks.push({\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: '_' + (task.taskTitle || '').slice(0, 100) + '_' }]\n  });\n} else {\n  blocks.push({\n    type: 'header',\n    text: { type: 'plain_text', text: emoji + ' ' + task.agent, emoji: true }\n  });\n  blocks.push({\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: 'responding to <@' + task.userId + '>' }]\n  });\n}\n\nblocks.push({ type: 'divider' });\nblocks.push({ type: 'section', text: { type: 'mrkdwn', text: truncated } });\nblocks.push({\n  type: 'context',\n  elements: [{ type: 'mrkdwn', text: '_model: ' + (task.model || task.agent + ':latest') + '_' }]\n});\n\nreturn [{ json: {\n  channelId: task.channelId,\n  thread_ts: task.ts,\n  payload: JSON.stringify({\n    channel: task.channelId,\n    thread_ts: task.ts,\n    blocks\n  })\n}}];\n"
-      },
       "id": "node-format",
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1520,
+        1320,
         300
-      ]
+      ],
+      "parameters": {
+        "jsCode": "\nfunction mdToMrkdwn(text) {\n  return text\n    .replace(/^#{1,6}\\s+(.+)$/gm, '*$1*')\n    .replace(/\\*\\*(.+?)\\*\\*/gs, '*$1*')\n    .replace(/__(.+?)__/gs, '*$1*')\n    .replace(/~~(.+?)~~/gs, '~$1~')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\n\nconst AGENT_EMOJI = {\n  kevin:     ':briefcase:',\n  jason:     ':gear:',\n  scaachi:   ':pencil:',\n  christian: ':dart:',\n  chidi:     ':microscope:'\n};\n\nconst STUDIO_LABEL = {\n  kevin:     '#studio-blueprint',\n  jason:     '#studio-forge',\n  scaachi:   '#studio-quill',\n  christian: '#ops-intel',\n  chidi:     '#studio-blueprint'\n};\n\nconst ollamaResp = $input.first().json;\nconst task       = $('Route Task').first().json;\n\nconst content   = ollamaResp.message?.content || 'No response.';\nconst MAX       = 2800;\nconst formatted = mdToMrkdwn(content);\nconst truncated = formatted.length > MAX\n  ? formatted.slice(0, MAX) + '\\n_[truncated \u2014 use /ai for longer responses]_'\n  : formatted;\n\nconst emoji = AGENT_EMOJI[task.agent] || ':robot_face:';\nconst blocks = [];\n\nif (task.isStructured) {\n  blocks.push({\n    type: 'header',\n    text: { type: 'plain_text', text: '\\u2705 ' + task.agent + ' \\u2014 task complete', emoji: true }\n  });\n  blocks.push({\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: '_' + (task.taskTitle || '').slice(0, 100) + '_' }]\n  });\n} else {\n  blocks.push({\n    type: 'header',\n    text: { type: 'plain_text', text: emoji + ' ' + task.agent, emoji: true }\n  });\n  blocks.push({\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: 'responding to <@' + task.userId + '>' }]\n  });\n}\n\nblocks.push({ type: 'divider' });\nblocks.push({ type: 'section', text: { type: 'mrkdwn', text: truncated } });\nblocks.push({\n  type: 'context',\n  elements: [{\n    type: 'mrkdwn',\n    text: `_model: ${task.model}_  \\u00b7  _output \\u2192 ${STUDIO_LABEL[task.agent] || '#studio-forge'}_`\n  }]\n});\n\nreturn [{ json: {\n  task,\n  rawContent: content,\n  channelId:  task.channelId,\n  thread_ts:  task.ts,\n  payload: JSON.stringify({\n    channel:   task.channelId,\n    thread_ts: task.ts,\n    blocks\n  })\n}}];\n"
+      }
     },
     {
+      "id": "node-post",
+      "name": "Post Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1540,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "https://slack.com/api/chat.postMessage",
@@ -181,7 +190,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer CONFIGURE_IN_N8N_CREDENTIALS"
+              "value": "={{ $env.SLACK_BOT_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -194,15 +203,133 @@
         "rawContentType": "application/json",
         "body": "={{ $json.payload }}",
         "options": {}
-      },
-      "id": "node-post",
-      "name": "Post Response",
+      }
+    },
+    {
+      "id": "node-get-team",
+      "name": "Get Linear Team",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "typeVersion": 4,
       "position": [
-        1740,
+        1760,
         300
-      ]
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.LINEAR_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={ \"query\": \"{ teams { nodes { id name key } } }\" }",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-create-record",
+      "name": "Create Linear Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1980,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.LINEAR_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ (() => {\n  const teams  = $('Get Linear Team').first().json.data?.teams?.nodes || [];\n  const teamId = teams[0]?.id || '';\n  const task   = $('Route Task').first().json;\n  const output = $('Format Response').first().json.rawContent || '';\n\n  const agentName = task.agent.charAt(0).toUpperCase() + task.agent.slice(1);\n  const titleBase = task.taskTitle || task.userText.slice(0, 60);\n  const title     = `${agentName}: ${titleBase}`;\n\n  const PRIORITY_MAP = { urgent: 1, high: 2, medium: 3, normal: 3, low: 4 };\n  const priority = PRIORITY_MAP[task.priority] || 3;\n\n  const desc =\n    `## Task\\n${task.userText}\\n\\n## ${agentName}'s Response\\n${output}\\n\\n---\\n` +\n    `*Source:* Slack <#${task.channelId}> from <@${task.userId}>\\n` +\n    `*Model:* ${task.model}\\n` +\n    `*Repository:* [cschulz-ceo/ai-workers](https://github.com/cschulz-ceo/ai-workers)`;\n\n  const mutation = `\n    mutation CreateIssue($input: IssueCreateInput!) {\n      issueCreate(input: $input) {\n        success\n        issue { id identifier title url }\n      }\n    }\n  `;\n\n  const variables = {\n    input: {\n      teamId,\n      title,\n      description: desc,\n      priority,\n      completedAt: new Date().toISOString()\n    }\n  };\n\n  return JSON.stringify({ query: mutation, variables });\n})() }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-post-linear-link",
+      "name": "Post Linear Link",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2200,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ (() => {\n  const issue = $json.data?.issueCreate?.issue;\n  const task  = $('Route Task').first().json;\n  if (!issue) return JSON.stringify({ channel: task.channelId, thread_ts: task.ts, text: '_Could not log to Linear \\u2014 check LINEAR_API_KEY._' });\n  return JSON.stringify({\n    channel:   task.channelId,\n    thread_ts: task.ts,\n    text: `\\uD83D\\uDD17 _Logged to Linear: <${issue.url}|${issue.identifier}>_`\n  });\n})() }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-post-studio",
+      "name": "Post to Studio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2420,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ (() => {\n  const issue  = $('Create Linear Record').first().json.data?.issueCreate?.issue;\n  const task   = $('Route Task').first().json;\n  const output = $('Format Response').first().json.rawContent || '';\n  const studioChannel = task.studioChannel;\n  if (!studioChannel) return '{}';\n\n  const agentName = task.agent.charAt(0).toUpperCase() + task.agent.slice(1);\n  const titleBase = task.taskTitle || task.userText.slice(0, 60);\n  const issueRef  = issue ? `*<${issue.url}|${issue.identifier}>*  \\u00b7  ` : '';\n  const preview   = output.length > 600 ? output.slice(0, 600) + '...' : output;\n\n  const AGENT_EMOJI = {\n    kevin: '\\uD83D\\uddFA', jason: '\\u2699\\uFE0F', scaachi: '\\u270D\\uFE0F', christian: '\\uD83C\\uDFAF', chidi: '\\uD83D\\uDD2C'\n  };\n  const emoji = AGENT_EMOJI[task.agent] || '\\u2705';\n\n  const blocks = [\n    {\n      type: 'section',\n      text: {\n        type: 'mrkdwn',\n        text: `${emoji}  ${issueRef}*${agentName}* completed: _${titleBase.slice(0, 80)}_`\n      }\n    },\n    { type: 'divider' },\n    { type: 'section', text: { type: 'mrkdwn', text: preview } },\n    {\n      type: 'context',\n      elements: [{\n        type: 'mrkdwn',\n        text: `_from <#${task.channelId}>  \\u00b7  model: ${task.model}_`\n      }]\n    }\n  ];\n\n  return JSON.stringify({\n    channel: studioChannel,\n    blocks,\n    text: `${emoji} ${agentName} completed: ${titleBase.slice(0, 80)}`\n  });\n})() }}",
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -296,10 +423,54 @@
           }
         ]
       ]
+    },
+    "Post Response": {
+      "main": [
+        [
+          {
+            "node": "Get Linear Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Linear Team": {
+      "main": [
+        [
+          {
+            "node": "Create Linear Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Linear Record": {
+      "main": [
+        [
+          {
+            "node": "Post Linear Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Linear Link": {
+      "main": [
+        [
+          {
+            "node": "Post to Studio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
   },
-  "active": false
+  "active": true
 }

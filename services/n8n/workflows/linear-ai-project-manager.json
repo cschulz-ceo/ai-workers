@@ -1,7 +1,6 @@
 {
   "id": "linear-pm-001",
   "name": "Linear AI Project Manager",
-  "active": false,
   "nodes": [
     {
       "id": "lpm-webhook",
@@ -45,7 +44,50 @@
         420
       ],
       "parameters": {
-        "jsCode": "\nconst body = $input.first().json.body || {};\n\n// Support both direct webhook calls and relay from events receiver\nconst text      = body.text || body.message || '';\nconst channelId = body.channel_id || body.channel || 'C0AJW9DTDSB';\nconst userId    = body.user_id || body.user || 'unknown';\nconst threadTs  = body.thread_ts || body.ts || '';\nconst userName  = body.user_name || body.username || 'unknown';\n\n// Strip bot @mentions\nconst cleanText = text.replace(/<@[^>]+>/g, '').trim();\n\nreturn [{ json: { text: cleanText, rawText: text, channelId, userId, userName, threadTs } }];\n"
+        "jsCode": "\nconst body = $input.first().json.body || {};\n\n// Support both direct webhook calls and relay from events receiver\nconst rawText   = body.text || body.message || '';\nconst channelId = body.channel_id || body.channel || 'C0AJW9DTDSB';\nconst userId    = body.user_id || body.user || 'unknown';\nconst threadTs  = body.thread_ts || body.ts || '';\nconst userName  = body.user_name || body.username || 'unknown';\n\n// Strip bot @mentions and leading/trailing whitespace\nconst stripped = rawText.replace(/<@[^>]+>/g, '').trim();\n\n// \u2500\u2500 Command-prefix override \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// Allows forcing a classification type: /pm task|story|epic|bug|spike|initiative <text>\n// e.g.  /pm bug Council not triggering\n//       /pm spike Research LLM context caching\n// If no prefix is present, forcedType is null \u2192 Ollama classifies.\nconst PREFIX_RE = /^(initiative|epic|story|task|bug|spike)\\s+/i;\nconst prefixMatch = stripped.match(PREFIX_RE);\n\nlet forcedType = null;\nlet cleanText  = stripped;\n\nif (prefixMatch) {\n  forcedType = prefixMatch[1].toLowerCase();\n  cleanText  = stripped.slice(prefixMatch[0].length).trim();\n}\n\nreturn [{ json: {\n  text:       cleanText,\n  rawText:    rawText,\n  channelId,\n  userId,\n  userName,\n  threadTs,\n  forcedType   // null \u2192 classify with Ollama; string \u2192 skip LLM\n}}];\n"
+      }
+    },
+    {
+      "id": "lpm-forced-check",
+      "name": "Forced Type?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        420
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.forcedType }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "lpm-build-forced",
+      "name": "Build Forced Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        280
+      ],
+      "parameters": {
+        "jsCode": "\n// User explicitly typed the classification \u2014 no LLM needed.\nconst d = $input.first().json;\n\nconst DEFAULT_PRIORITY = { initiative: 2, epic: 2, story: 3, task: 3, bug: 2, spike: 3 };\nconst DEFAULT_ESTIMATE = { initiative: null, epic: 8, story: 5, task: 3, bug: 2, spike: 3 };\n\nconst classification = {\n  type:        d.forcedType,\n  title:       d.text.slice(0, 80),\n  description: d.text,\n  priority:    DEFAULT_PRIORITY[d.forcedType] || 3,\n  labels:      [],\n  estimate:    DEFAULT_ESTIMATE[d.forcedType] || null,\n  reasoning:   `Manually forced to '${d.forcedType}' via command prefix.`\n};\n\nconst PRIORITY_MAP = { urgent: 1, high: 2, medium: 3, low: 4 };\n\nreturn [{ json: {\n  ...d,\n  classification,\n  issueType:   classification.type,\n  title:       classification.title,\n  description: classification.description,\n  priority:    classification.priority,\n  labels:      classification.labels,\n  estimate:    classification.estimate,\n  reasoning:   classification.reasoning,\n  shouldCreate: true\n}}];\n"
       }
     },
     {
@@ -54,15 +96,15 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        440,
-        420
+        680,
+        560
       ],
       "parameters": {
         "method": "POST",
         "url": "http://host.docker.internal:11434/api/chat",
         "sendBody": true,
         "contentType": "json",
-        "body": "={{\nJSON.stringify({\n  model: \"llama3.1:70b\",\n  stream: false,\n  messages: [\n    {\n      role: \"system\",\n      content: `You are a project management AI for Biulatech. Analyze Slack messages and classify them into project management items.\n\nCLASSIFICATION TYPES:\n- epic: Large initiative spanning multiple sprints (e.g., \"build a new product feature\", \"migrate infrastructure\")\n- story: User-facing feature or capability (e.g., \"users can upload images\", \"add dark mode\")\n- task: Specific technical work item (e.g., \"fix login bug\", \"add API endpoint\", \"update documentation\")\n- bug: Something broken that needs fixing\n- idea: Interesting idea worth tracking but not yet committed\n- ignore: Casual chat, status updates, reactions, or content with no actionable project work\n\nOUTPUT FORMAT (JSON only, no extra text):\n{\n  \"type\": \"epic|story|task|bug|idea|ignore\",\n  \"title\": \"Short title (max 80 chars)\",\n  \"description\": \"Detailed description for the issue (2-3 sentences)\",\n  \"priority\": \"urgent|high|medium|low\",\n  \"labels\": [\"label1\", \"label2\"],\n  \"estimate\": 1-8,\n  \"reasoning\": \"Brief explanation of why you classified it this way\"\n}\n\nGUIDELINES:\n- Be selective: only classify messages with clear actionable work\n- Slack chatter, questions, and social messages \u2192 ignore\n- When a message describes building something \u2192 story or epic\n- When a message describes a specific fix or task \u2192 task\n- When a message reports something broken \u2192 bug\n- Assign priority based on urgency signals in the text\n- Labels should be from: frontend, backend, ai, infrastructure, research, design, data`\n    },\n    {\n      role: \"user\",\n      content: $('Parse Input').first().json.text\n    }\n  ]\n})\n}}"
+        "body": "={{\nJSON.stringify({\n  model: \"llama3.1:70b\",\n  stream: false,\n  messages: [\n    {\n      role: \"system\",\n      content: `You are a project management AI for Biulatech, an AI-automation studio. Your job is to classify Slack messages into Linear work items using a precise Agile taxonomy.\n\nCLASSIFICATION TAXONOMY:\n\n1. initiative \u2014 An OKR-level business goal spanning multiple epics and quarters.\n   Signals: \"overhaul\", \"redesign\", \"full rebuild\", \"new product\", cross-team scope, strategic direction.\n   Example: \"We need to rebuild the entire monitoring stack from scratch.\"\n\n2. epic \u2014 A multi-sprint deliverable that implements part of an initiative.\n   Signals: \"new system\", \"end-to-end\", spans 2\u20136 weeks, multiple stories underneath it.\n   Example: \"Add end-to-end GPU alerting pipeline (Prometheus \u2192 Grafana \u2192 n8n \u2192 Slack).\"\n\n3. story \u2014 A single-sprint, user-facing capability. Often framed as 'users can...' or 'add ability to...'.\n   Signals: 'users can', 'ability to', 'support for', single feature deliverable, has clear acceptance criteria.\n   Example: \"Users can upload an image in Slack and get an enhanced version back.\"\n\n4. task \u2014 A specific, bounded technical work item. Can be completed in hours to a few days.\n   Signals: \"fix\", \"update\", \"add\", \"configure\", \"write\", \"migrate\", \"deploy\", single file/service scope.\n   Example: \"Add retry logic to the Weekly News Digest HTTP node.\"\n\n5. bug \u2014 Something that was working and is now broken, or produces incorrect output.\n   Signals: \"not working\", \"broken\", \"error\", \"failing\", \"stopped\", \"unexpected behavior\".\n   Example: \"Council workflow not triggering on #the-council messages.\"\n\n6. spike \u2014 A time-boxed research or investigation item. No deliverable beyond a decision or document.\n   Signals: \"research\", \"investigate\", \"explore\", \"spike\", \"evaluate\", \"compare\", \"proof of concept\", \"POC\".\n   Example: \"Investigate whether Mistral-7B can replace llama3.1:70b for /pm classification.\"\n   Rule: estimate MUST be \u2264 3 story points.\n\n7. ignore \u2014 No actionable project work. Casual chat, reactions, status updates, greetings.\n   Example: \"Nice work everyone!\", \"What time is standup?\"\n\nDECISION TREE:\n  IF spans multiple teams/quarters/epics \u2192 initiative\n  ELSE IF spans multiple sprints (2\u20136 weeks) \u2192 epic\n  ELSE IF user-facing feature, single sprint \u2192 story\n  ELSE IF something is broken or producing errors \u2192 bug\n  ELSE IF research/investigation, no code deliverable \u2192 spike\n  ELSE IF specific bounded technical action \u2192 task\n  ELSE \u2192 ignore\n\nDOMAIN LABELS (pick 1\u20133 that best apply):\n  automation   \u2014 n8n workflows, triggers, scheduling, webhook routing\n  ai-core      \u2014 Ollama models, prompts, agent personalities, The Council\n  infrastructure \u2014 systemd, Docker, GPU, networking, ngrok\n  monitoring   \u2014 Prometheus, Grafana, alerts, exporters\n  comfyui      \u2014 image/video generation, ComfyUI workflows\n  research     \u2014 spikes, evaluations, proof of concepts\n  devops       \u2014 CI/CD, backups, deployments, git hygiene\n\nOUTPUT FORMAT \u2014 return valid JSON only, no prose, no markdown:\n{\n  \"type\": \"initiative|epic|story|task|bug|spike|ignore\",\n  \"title\": \"Concise action-oriented title (max 80 chars)\",\n  \"description\": \"2\u20133 sentence description written for a developer reading it in Linear. Include what, why, and acceptance criteria if applicable.\",\n  \"priority\": \"urgent|high|medium|low\",\n  \"labels\": [\"label1\", \"label2\"],\n  \"estimate\": <integer 1\u20138, null for initiative, max 3 for spike>,\n  \"reasoning\": \"One sentence explaining the classification decision.\"\n}\n\nPRIORITY SIGNALS:\n  urgent \u2014 production down, blocking all work, data loss risk\n  high   \u2014 blocking a workflow or person, needs this sprint\n  medium \u2014 important but not blocking, fits in next 2 sprints\n  low    \u2014 nice to have, no deadline, backlog candidate`\n    },\n    {\n      role: \"user\",\n      content: $('Parse Input').first().json.text\n    }\n  ]\n})\n}}"
       }
     },
     {
@@ -71,11 +113,25 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        920,
+        560
+      ],
+      "parameters": {
+        "jsCode": "\nconst raw    = $input.first().json.message?.content || '';\nconst parsed = $('Parse Input').first().json;\n\nlet classification;\ntry {\n  // Extract JSON from response (handle markdown code blocks if Ollama wraps output)\n  const jsonMatch = raw.match(/```(?:json)?\\s*([\\s\\S]*?)\\s*```/) ||\n                    raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = jsonMatch ? jsonMatch[1] : raw;\n  classification = JSON.parse(jsonStr.trim());\n} catch(e) {\n  classification = { type: 'ignore', reasoning: 'Could not parse Ollama response: ' + e.message };\n}\n\n// \u2500\u2500 Spike guard: estimate must be \u2264 3 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nif (classification.type === 'spike' && classification.estimate > 3) {\n  classification.estimate = 3;\n}\n\n// \u2500\u2500 Priority string \u2192 Linear integer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst PRIORITY_MAP = { urgent: 1, high: 2, medium: 3, low: 4 };\nconst priorityInt = PRIORITY_MAP[classification.priority] || 3;\n\n// \u2500\u2500 Validate labels against allowed set \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst ALLOWED_LABELS = new Set(['automation','ai-core','infrastructure','monitoring','comfyui','research','devops']);\nconst labels = (classification.labels || []).filter(l => ALLOWED_LABELS.has(l));\n\nreturn [{ json: {\n  ...parsed,\n  classification,\n  issueType:   classification.type,\n  title:       classification.title || parsed.text.slice(0, 80),\n  description: classification.description || parsed.text,\n  priority:    priorityInt,\n  labels,\n  estimate:    classification.estimate || null,\n  reasoning:   classification.reasoning || '',\n  shouldCreate: classification.type !== 'ignore'\n}}];\n"
+      }
+    },
+    {
+      "id": "lpm-merge",
+      "name": "Merge Paths",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1160,
         420
       ],
       "parameters": {
-        "jsCode": "\nconst raw = $input.first().json.message?.content || '';\nconst parsed = $('Parse Input').first().json;\n\nlet classification;\ntry {\n  // Extract JSON from the response (handle markdown code blocks)\n  const jsonMatch = raw.match(/```(?:json)?\\s*([\\s\\S]*?)\\s*```/) ||\n                    raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = jsonMatch ? jsonMatch[1] : raw;\n  classification = JSON.parse(jsonStr.trim());\n} catch(e) {\n  // Fallback: if parsing fails, mark as ignore\n  classification = { type: 'ignore', reasoning: 'Could not parse Ollama response' };\n}\n\n// Map priority strings to Linear priority integers\nconst PRIORITY_MAP = { urgent: 1, high: 2, medium: 3, low: 4 };\nconst priorityInt = PRIORITY_MAP[classification.priority] || 3;\n\nreturn [{ json: {\n  ...parsed,\n  classification,\n  issueType:   classification.type,\n  title:       classification.title || parsed.text.slice(0, 80),\n  description: classification.description || parsed.text,\n  priority:    priorityInt,\n  labels:      classification.labels || [],\n  estimate:    classification.estimate || null,\n  reasoning:   classification.reasoning || '',\n  shouldCreate: classification.type !== 'ignore'\n}}];\n"
+        "mode": "passThrough",
+        "output": "input1"
       }
     },
     {
@@ -84,7 +140,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        920,
+        1380,
         420
       ],
       "parameters": {
@@ -114,7 +170,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1160,
+        1620,
         300
       ],
       "parameters": {
@@ -144,7 +200,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1400,
+        1860,
         300
       ],
       "parameters": {
@@ -165,7 +221,7 @@
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ (() => {\n  const teams = $('Get Linear Teams').first().json.data?.teams?.nodes || [];\n  const teamId = teams[0]?.id || '';   // Use first team; adjust if needed\n  const d = $('Parse Classification').first().json;\n\n  const GITHUB_REPO = 'https://github.com/cschulz-ceo/ai-workers';\n\n  // Build description with GitHub repo context so Linear<->GitHub auto-linking works\n  const desc = d.description +\n    '\\n\\n---\\n' +\n    '*Source:* Slack message from <@' + d.userId + '> in <#' + d.channelId + '>\\n' +\n    '*AI reasoning:* ' + d.reasoning + '\\n' +\n    '*Repository:* ' + GITHUB_REPO + '\\n' +\n    '*Branch context:* See [cschulz-ceo/ai-workers](' + GITHUB_REPO + ') for related commits and PRs.';\n\n  const mutation = `\n    mutation CreateIssue($input: IssueCreateInput!) {\n      issueCreate(input: $input) {\n        success\n        issue {\n          id\n          identifier\n          title\n          url\n          priority\n          state { name }\n        }\n      }\n    }\n  `;\n\n  const variables = {\n    input: {\n      teamId:      teamId,\n      title:       d.title,\n      description: desc,\n      priority:    d.priority,\n      estimate:    d.estimate\n    }\n  };\n\n  return JSON.stringify({ query: mutation, variables });\n})() }}"
+        "body": "={{ (() => {\n  const teams  = $('Get Linear Teams').first().json.data?.teams?.nodes || [];\n  const teamId = teams[0]?.id || '';\n  const d      = $('Merge Paths').first().json;\n\n  const GITHUB_REPO = 'https://github.com/cschulz-ceo/ai-workers';\n\n  // \u2500\u2500 Type \u2192 Linear label prefix \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  const TYPE_PREFIX = {\n    initiative: '\ud83c\udf10 Initiative',\n    epic:       '\ud83d\uddfa\ufe0f Epic',\n    story:      '\ud83d\udcd6 Story',\n    task:       '\u2705 Task',\n    bug:        '\ud83d\udc1b Bug',\n    spike:      '\ud83d\udd2c Spike'\n  };\n  const typeLabel = TYPE_PREFIX[d.issueType] || '\u2705 Task';\n\n  // \u2500\u2500 Spike: add time-box note to description \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  const spikeNote = d.issueType === 'spike'\n    ? '\\n\\n> \u23f1\ufe0f **Spike** \u2014 time-boxed to ' + (d.estimate || 3) + ' pts. Deliverable: decision doc or ADR.'\n    : '';\n\n  const desc = d.description + spikeNote +\n    '\\n\\n---\\n' +\n    '*Type:* ' + typeLabel + '\\n' +\n    '*Source:* Slack message from <@' + d.userId + '> in <#' + d.channelId + '>\\n' +\n    '*AI reasoning:* ' + d.reasoning + '\\n' +\n    '*Repository:* [cschulz-ceo/ai-workers](' + GITHUB_REPO + ')';\n\n  const mutation = `\n    mutation CreateIssue($input: IssueCreateInput!) {\n      issueCreate(input: $input) {\n        success\n        issue {\n          id\n          identifier\n          title\n          url\n          priority\n          state { name }\n        }\n      }\n    }\n  `;\n\n  const variables = {\n    input: {\n      teamId,\n      title:       d.title,\n      description: desc,\n      priority:    d.priority,\n      estimate:    d.estimate\n    }\n  };\n\n  return JSON.stringify({ query: mutation, variables });\n})() }}"
       }
     },
     {
@@ -174,11 +230,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1640,
+        2100,
         300
       ],
       "parameters": {
-        "jsCode": "\nconst issue = $input.first().json.data?.issueCreate?.issue;\nconst d     = $('Parse Classification').first().json;\n\nif (!issue) {\n  return [{ json: {\n    channelId: d.channelId,\n    threadTs:  d.threadTs,\n    payload: JSON.stringify({\n      channel: d.channelId,\n      thread_ts: d.threadTs,\n      text: '\u26a0\ufe0f Linear issue creation failed. Check LINEAR_API_KEY env var.'\n    })\n  }}];\n}\n\nconst TYPE_EMOJI = { epic:'\ud83d\uddfa\ufe0f', story:'\ud83d\udcd6', task:'\u2705', bug:'\ud83d\udc1b', idea:'\ud83d\udca1' };\nconst PRIORITY_LABEL = { 1:'\ud83d\udd34 Urgent', 2:'\ud83d\udfe0 High', 3:'\ud83d\udfe1 Medium', 4:'\ud83d\udd35 Low' };\n\nconst emoji    = TYPE_EMOJI[d.issueType] || '\u2705';\nconst priority = PRIORITY_LABEL[d.priority] || 'Medium';\nconst labelsStr = d.labels.length ? d.labels.map(l=>'`'+l+'`').join(' ') : '';\n\nconst blocks = [\n  {\n    type: 'section',\n    text: { type: 'mrkdwn', text:\n      `${emoji} *<${issue.url}|${issue.identifier}: ${issue.title}>* created in Linear\\n` +\n      `*Type:* ${d.issueType}  |  *Priority:* ${priority}${labelsStr ? '  |  *Labels:* '+labelsStr : ''}`\n    }\n  },\n  {\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: `_${d.reasoning}_` }]\n  }\n];\n\nreturn [{ json: {\n  channelId: d.channelId,\n  threadTs:  d.threadTs,\n  payload: JSON.stringify({\n    channel:   d.channelId,\n    thread_ts: d.threadTs || undefined,\n    blocks\n  })\n}}];\n"
+        "jsCode": "\nconst issue = $input.first().json.data?.issueCreate?.issue;\nconst d     = $('Merge Paths').first().json;\n\nif (!issue) {\n  return [{ json: {\n    channelId: d.channelId,\n    threadTs:  d.threadTs,\n    payload: JSON.stringify({\n      channel:   d.channelId,\n      thread_ts: d.threadTs || undefined,\n      text: '\u26a0\ufe0f Linear issue creation failed. Check LINEAR_API_KEY env var.'\n    })\n  }}];\n}\n\n// \u2500\u2500 Type \u2192 emoji + label \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst TYPE_META = {\n  initiative: { emoji: '\ud83c\udf10', label: 'Initiative' },\n  epic:       { emoji: '\ud83d\uddfa\ufe0f',  label: 'Epic'       },\n  story:      { emoji: '\ud83d\udcd6', label: 'Story'      },\n  task:       { emoji: '\u2705', label: 'Task'       },\n  bug:        { emoji: '\ud83d\udc1b', label: 'Bug'        },\n  spike:      { emoji: '\ud83d\udd2c', label: 'Spike'      }\n};\nconst PRIORITY_META = {\n  1: { emoji: '\ud83d\udd34', label: 'Urgent' },\n  2: { emoji: '\ud83d\udfe0', label: 'High'   },\n  3: { emoji: '\ud83d\udfe1', label: 'Medium' },\n  4: { emoji: '\ud83d\udd35', label: 'Low'    }\n};\n\nconst type     = TYPE_META[d.issueType]     || { emoji: '\u2705', label: 'Task'   };\nconst priority = PRIORITY_META[d.priority]  || { emoji: '\ud83d\udfe1', label: 'Medium' };\nconst labelsStr = d.labels.length ? d.labels.map(l => '`' + l + '`').join('  ') : '_none_';\nconst estimateStr = d.estimate ? `${d.estimate} pts` : 'unestimated';\nconst forcedNote  = d.forcedType ? '  _(type forced via prefix)_' : '';\nconst spikeNote   = d.issueType === 'spike' ? '\\n> \u23f1\ufe0f Time-boxed spike \u2014 deliverable is a decision or ADR, not code.' : '';\n\nconst blocks = [\n  {\n    type: 'section',\n    text: {\n      type: 'mrkdwn',\n      text:\n        `${type.emoji} *<${issue.url}|${issue.identifier}: ${issue.title}>*  \u2192  ${type.label} created in Linear${forcedNote}\\n` +\n        `\u251c ${priority.emoji} *${priority.label}*  \u2022  \ud83d\udccf *${estimateStr}*  \u2022  \ud83c\udff7\ufe0f ${labelsStr}\\n` +\n        `\u2514 _${d.reasoning}_` +\n        spikeNote\n    }\n  }\n];\n\nreturn [{ json: {\n  channelId: d.channelId,\n  threadTs:  d.threadTs,\n  payload: JSON.stringify({\n    channel:   d.channelId,\n    thread_ts: d.threadTs || undefined,\n    blocks\n  })\n}}];\n"
       }
     },
     {
@@ -187,7 +243,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1880,
+        2340,
         300
       ],
       "parameters": {
@@ -198,7 +254,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+              "value": "={{ $env.SLACK_BOT_TOKEN }}"
             }
           ]
         },
@@ -213,7 +269,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1160,
+        1620,
         560
       ],
       "parameters": {
@@ -242,7 +298,36 @@
       "main": [
         [
           {
+            "node": "Forced Type?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forced Type?": {
+      "main": [
+        [
+          {
+            "node": "Build Forced Classification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Classify with Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Forced Classification": {
+      "main": [
+        [
+          {
+            "node": "Merge Paths",
             "type": "main",
             "index": 0
           }
@@ -261,6 +346,17 @@
       ]
     },
     "Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Merge Paths",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Paths": {
       "main": [
         [
           {
@@ -322,5 +418,9 @@
         ]
       ]
     }
-  }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
 }

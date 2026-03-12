@@ -1,0 +1,120 @@
+{
+  "id": "ops-gpu-alert-001",
+  "name": "Ops GPU Alert",
+  "nodes": [
+    {
+      "id": "oga-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "grafana-gpu-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "grafana-gpu-alert-wh"
+    },
+    {
+      "id": "oga-format",
+      "name": "Format Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\n// Grafana unified alerting webhook payload (v10+ format)\nconst body = $input.first().json.body || $input.first().json || {};\n\nconst status  = body.status || 'firing';   // 'firing' | 'resolved'\nconst alerts  = body.alerts || [];\n\nconst isFiring   = status === 'firing';\nconst statusEmoji = isFiring ? '\ud83d\udd34' : '\u2705';\nconst statusLabel = isFiring ? 'FIRING' : 'RESOLVED';\n\n// \u2500\u2500 Parse first alert (GPU alerts are typically one at a time) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst alert = alerts[0] || {};\nconst labels      = alert.labels || {};\nconst annotations = alert.annotations || {};\n\nconst alertName   = labels.alertname   || 'GPU Alert';\nconst instance    = labels.instance    || 'host';\nconst summary     = annotations.summary     || alertName;\nconst description = annotations.description || '';\n\n// \u2500\u2500 Try to extract current GPU value from annotations (if Grafana passes it) \u2500\nconst valueStr = annotations.value || labels.value || '';\nconst valueLine = valueStr ? `\\n*Current value:* ${valueStr}` : '';\n\n// \u2500\u2500 Time \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst firedAt = alert.startsAt ? new Date(alert.startsAt).toLocaleString('en-US', { timeZone: 'America/New_York' }) : new Date().toLocaleString();\n\n// \u2500\u2500 Grafana deep-link \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst grafanaUrl  = alert.generatorURL || 'http://localhost:3001';\nconst dashboardUrl = 'http://localhost:3001/d/biulatech-ai-hub';\n\nconst blocks = [\n  {\n    type: 'header',\n    text: {\n      type: 'plain_text',\n      text: `${statusEmoji} GPU Alert ${statusLabel}: ${alertName}`,\n      emoji: true\n    }\n  },\n  {\n    type: 'section',\n    text: {\n      type: 'mrkdwn',\n      text:\n        `*${summary}*${valueLine}\\n` +\n        (description ? `${description}\\n` : '') +\n        `*Instance:* ${instance}  |  *Fired at:* ${firedAt}`\n    }\n  },\n  {\n    type: 'actions',\n    elements: [\n      {\n        type: 'button',\n        text: { type: 'plain_text', text: '\ud83d\udcca Open Grafana', emoji: true },\n        url: dashboardUrl,\n        style: isFiring ? 'danger' : 'primary'\n      },\n      {\n        type: 'button',\n        text: { type: 'plain_text', text: '\ud83d\udd17 Alert Rule', emoji: true },\n        url: grafanaUrl\n      }\n    ]\n  }\n];\n\nreturn [{ json: {\n  status,\n  isFiring,\n  alertName,\n  blocks,\n  payload: JSON.stringify({\n    channel: 'C0AL38DHHGC',   // #ops-alerts\n    blocks,\n    text: `${statusEmoji} GPU Alert ${statusLabel}: ${summary}`  // fallback text\n  })\n}}];\n"
+      }
+    },
+    {
+      "id": "oga-post",
+      "name": "Post to Ops Alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.payload }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "oga-respond",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\":true}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Format Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert": {
+      "main": [
+        [
+          {
+            "node": "Post to Ops Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Ops Alerts": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "active": true
+}
