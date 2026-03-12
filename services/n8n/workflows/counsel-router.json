@@ -136,8 +136,31 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const parsed = $('Parse Message').first().json;\nconst historyData = $input.first().json;\nconst SLACK_TOKEN = $env.SLACK_BOT_TOKEN;\n\n// Build initial channel context from recent human messages\nconst messages = historyData.messages || [];\nconst contextLines = messages\n  .filter(m => !m.bot_id && m.text && m.text.trim())\n  .reverse()\n  .slice(0, 12)\n  .map(m => `<@${m.user || 'user'}>: ${m.text.replace(/<[^>]+>/g, '').trim()}`)\n  .join('\\n');\n\nconst channelContext = contextLines\n  ? `Recent conversation in #the-council:\\n${contextLines}\\n\\n`\n  : '';\n\nconst { channelId, threadTs, userId, text: userText, memberDetails } = parsed;\n\n// Accumulates replies for deliberation context\nconst postedReplies = [];\n\nfor (let idx = 0; idx < memberDetails.length; idx++) {\n  const member = memberDetails[idx];\n\n  // Stagger: wait before each member after the first\n  if (idx > 0) {\n    await new Promise(r => setTimeout(r, 4000));\n\n    // Fetch thread to capture what prior members actually posted to Slack\n    const threadUrl = `https://slack.com/api/conversations.replies?channel=${channelId}&ts=${threadTs}&limit=20`;\n    const threadRaw = await $helpers.httpRequest({\n      method: 'GET',\n      url: threadUrl,\n      headers: { Authorization: `Bearer ${SLACK_TOKEN}` },\n    });\n    const threadResp = typeof threadRaw === 'string' ? JSON.parse(threadRaw) : threadRaw;\n\n    const botMessages = (threadResp.messages || [])\n      .filter(m => m.bot_id && m.text)\n      .map(m => m.text.replace(/<[^>]+>/g, '').trim())\n      .filter(Boolean);\n\n    if (botMessages.length > 0) {\n      // Sync our local accumulator with the live thread\n      postedReplies.length = 0;\n      postedReplies.push(...botMessages);\n    }\n  }\n\n  // System prompt \u2014 persona identity\n  const systemPrompt = `You are ${member.name}, ${member.role} at Biula Tech.\n\nYou are in #the-council \u2014 a Slack channel where five AI council members advise on company matters. The other members are: Christian \ud83c\udfaf (Startup Strategist), Kevin \ud83c\udfd7\ufe0f (Systems Architect), Jason \u2699\ufe0f (Full-Stack Engineer), Scaachi \u270d\ufe0f (Marketing Lead), Chidi \ud83d\udd2c (Research Analyst).\n\nKeep replies conversational and concise \u2014 2-4 sentences unless genuine depth is needed. Respond in character, no bullet lists, natural dialogue.`;\n\n  // User prompt \u2014 include prior deliberation if available\n  let userPrompt;\n  if (postedReplies.length > 0) {\n    const priorContext = postedReplies\n      .slice(-3)\n      .map(r => r.substring(0, 400))\n      .join('\\n\\n---\\n\\n');\n    userPrompt = `${channelContext}<@${userId}> asks: ${userText}\\n\\n--- Council responses so far ---\\n${priorContext}\\n\\nNow respond as ${member.name}. Build on, challenge, or add nuance to what's been said.`;\n  } else {\n    userPrompt = `${channelContext}<@${userId}> asks: ${userText}`;\n  }\n\n  // Call Ollama\n  const ollamaRaw = await $helpers.httpRequest({\n    method: 'POST',\n    url: 'http://host.docker.internal:11434/api/chat',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      model: member.model,\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: userPrompt },\n      ],\n      stream: false,\n      options: { temperature: 0.65, num_ctx: 4096 },\n    }),\n  });\n  const ollamaResp = typeof ollamaRaw === 'string' ? JSON.parse(ollamaRaw) : ollamaRaw;\n\n  const rawReply = ollamaResp.message?.content || ollamaResp.response || '(no response)';\n  const formattedReply = `${member.emoji} *${member.name}* \u2014 ${member.role}\\n\\n${rawReply}`;\n\n  // Track this member's reply text so subsequent members can reference it\n  postedReplies.push(`${member.name}: ${rawReply}`);\n\n  // Post to Slack\n  await $helpers.httpRequest({\n    method: 'POST',\n    url: 'https://slack.com/api/chat.postMessage',\n    headers: {\n      Authorization: `Bearer ${SLACK_TOKEN}`,\n      'Content-Type': 'application/json',\n    },\n    body: JSON.stringify({\n      channel: channelId,\n      thread_ts: threadTs,\n      text: formattedReply,\n      unfurl_links: false,\n    }),\n  });\n}\n\nreturn [{ json: { done: true, memberCount: memberDetails.length, channelId, threadTs } }];"
+        "jsCode": "const parsed = $('Parse Message').first().json;\nconst historyData = $input.first().json;\nconst SLACK_TOKEN = $('Config').first().json.slackToken;\n\n// Helper: HTTPS POST/GET using Node built-in\nconst httpRequest = (url, opts = {}) => new Promise((resolve, reject) => {\n  const { URL } = require('url');\n  const https = require('https');\n  const http = require('http');\n  const parsed_url = new URL(url);\n  const client = parsed_url.protocol === 'https:' ? https : http;\n  const bodyStr = opts.body || '';\n  const headers = { ...(opts.headers || {}) };\n  if (bodyStr) headers['Content-Length'] = Buffer.byteLength(bodyStr);\n  const req = client.request({\n    hostname: parsed_url.hostname,\n    port: parsed_url.port,\n    path: parsed_url.pathname + parsed_url.search,\n    method: opts.method || 'GET',\n    headers,\n  }, (res) => {\n    let data = '';\n    res.on('data', chunk => data += chunk);\n    res.on('end', () => {\n      try { resolve(JSON.parse(data)); } catch { resolve(data); }\n    });\n  });\n  req.on('error', reject);\n  if (bodyStr) req.write(bodyStr);\n  req.end();\n});\n\n// Build initial channel context from recent human messages\nconst messages = historyData.messages || [];\nconst contextLines = messages\n  .filter(m => !m.bot_id && m.text && m.text.trim())\n  .reverse()\n  .slice(0, 12)\n  .map(m => `<@${m.user || 'user'}>: ${m.text.replace(/<[^>]+>/g, '').trim()}`)\n  .join('\\n');\n\nconst channelContext = contextLines\n  ? `Recent conversation in #the-council:\\n${contextLines}\\n\\n`\n  : '';\n\nconst { channelId, threadTs, userId, text: userText, memberDetails } = parsed;\n\nconst postedReplies = [];\n\nfor (let idx = 0; idx < memberDetails.length; idx++) {\n  const member = memberDetails[idx];\n\n  if (idx > 0) {\n    await new Promise(r => setTimeout(r, 4000));\n\n    const threadUrl = `https://slack.com/api/conversations.replies?channel=${channelId}&ts=${threadTs}&limit=20`;\n    const threadResp = await httpRequest(threadUrl, {\n      method: 'GET',\n      headers: { Authorization: `Bearer ${SLACK_TOKEN}` },\n    });\n\n    const botMessages = (threadResp.messages || [])\n      .filter(m => m.bot_id && m.text)\n      .map(m => m.text.replace(/<[^>]+>/g, '').trim())\n      .filter(Boolean);\n\n    if (botMessages.length > 0) {\n      postedReplies.length = 0;\n      postedReplies.push(...botMessages);\n    }\n  }\n\n  const systemPrompt = `You are ${member.name}, ${member.role} at Biula Tech.\n\nYou are in #the-council \u2014 a Slack channel where five AI council members advise on company matters. The other members are: Christian \ud83c\udfaf (Startup Strategist), Kevin \ud83c\udfd7\ufe0f (Systems Architect), Jason \u2699\ufe0f (Full-Stack Engineer), Scaachi \u270d\ufe0f (Marketing Lead), Chidi \ud83d\udd2c (Research Analyst).\n\nKeep replies conversational and concise \u2014 2-4 sentences unless genuine depth is needed. Respond in character, no bullet lists, natural dialogue.`;\n\n  let userPrompt;\n  if (postedReplies.length > 0) {\n    const priorContext = postedReplies\n      .slice(-3)\n      .map(r => r.substring(0, 400))\n      .join('\\n\\n---\\n\\n');\n    userPrompt = `${channelContext}<@${userId}> asks: ${userText}\\n\\n--- Council responses so far ---\\n${priorContext}\\n\\nNow respond as ${member.name}. Build on, challenge, or add nuance to what's been said.`;\n  } else {\n    userPrompt = `${channelContext}<@${userId}> asks: ${userText}`;\n  }\n\n  const ollamaBody = JSON.stringify({\n    model: member.model,\n    messages: [\n      { role: 'system', content: systemPrompt },\n      { role: 'user', content: userPrompt },\n    ],\n    stream: false,\n    options: { temperature: 0.65, num_ctx: 4096 },\n  });\n\n  const ollamaResp = await httpRequest('http://host.docker.internal:11434/api/chat', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: ollamaBody,\n  });\n\n  const rawReply = ollamaResp.message?.content || ollamaResp.response || '(no response)';\n  const formattedReply = `${member.emoji} *${member.name}* \u2014 ${member.role}\\n\\n${rawReply}`;\n\n  postedReplies.push(`${member.name}: ${rawReply}`);\n\n  await httpRequest('https://slack.com/api/chat.postMessage', {\n    method: 'POST',\n    headers: {\n      Authorization: `Bearer ${SLACK_TOKEN}`,\n      'Content-Type': 'application/json',\n    },\n    body: JSON.stringify({\n      channel: channelId,\n      thread_ts: threadTs,\n      text: formattedReply,\n      unfurl_links: false,\n    }),\n  });\n}\n\nreturn [{ json: { done: true, memberCount: memberDetails.length, channelId, threadTs } }];\n"
       }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-slack-token",
+              "name": "slackToken",
+              "value": "={{ $env.SLACK_BOT_TOKEN }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        900,
+        500
+      ]
     }
   ],
   "connections": {
@@ -187,6 +210,17 @@
       ]
     },
     "Fetch Recent Channel Context": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
       "main": [
         [
           {
