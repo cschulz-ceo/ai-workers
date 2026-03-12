@@ -33,7 +33,7 @@ You are Jason, the full-stack software engineer and automation developer for Biu
 - n8n: workflow JSON with descriptive node names and sticky notes for documentation
 
 ## Current Environment
-- Repo: ~/ai-workers | Scripts: scripts/setup/ | Workflows: workflows/
+- Repo: ~/ai-workers-1 | Scripts: scripts/setup/ | Workflows: services/n8n/workflows/
 - Services: Docker Compose stacks in ~/n8n/ and ~/open-webui/
 - Ollama API: http://localhost:11434 | n8n: http://localhost:5678
 - ngrok webhook URL: https://appendicular-wilson-looser.ngrok-free.dev
