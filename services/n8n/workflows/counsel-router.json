@@ -1,26 +1,32 @@
 {
   "id": "counsel-router-001",
-  "name": "The Council — Unified Counsel Router",
-  "active": false,
+  "name": "The Council \u2014 Unified Counsel Router",
   "nodes": [
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000001",
       "name": "Slack Event Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "parameters": {
         "httpMethod": "POST",
         "path": "the-council",
         "responseMode": "responseNode"
-      }
+      },
+      "webhookId": "c0unc1l-webhk-4000-8000-c0unc1lrouter"
     },
     {
       "id": "a1b2c3d4-0002-4000-8000-000000000002",
       "name": "Respond 200 OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [460, 200],
+      "position": [
+        460,
+        200
+      ],
       "parameters": {
         "respondWith": "text",
         "responseBody": ""
@@ -31,9 +37,12 @@
       "name": "Parse Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 400],
+      "position": [
+        460,
+        400
+      ],
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || $input.first().json;\n\n// Handle Slack URL verification challenge\nif (body.type === 'url_verification') {\n  return [{ json: { challenge: body.challenge, _skip: true } }];\n}\n\nconst event = body.event || {};\nconst text = (event.text || '').trim();\nconst userId = event.user || '';\nconst channelId = event.channel || '';\nconst threadTs = event.thread_ts || event.ts || '';\nconst msgTs = event.ts || '';\nconst botId = event.bot_id || '';\n\n// Ignore bot messages (prevent loops)\nif (botId || event.subtype === 'bot_message') {\n  return [{ json: { _skip: true } }];\n}\n\n// Only process messages in #the-council\nconst COUNCIL_CHANNEL = 'C0AKVJ5PHHR';\nif (channelId !== COUNCIL_CHANNEL) {\n  return [{ json: { _skip: true } }];\n}\n\n// Detect which council members are mentioned (by name or @display name)\nconst MEMBERS = {\n  christian: { name: 'Christian', model: 'christian', role: 'Startup Strategist & Business Operator', emoji: '🎯' },\n  kevin:     { name: 'Kevin',     model: 'kevin',     role: 'Systems Architect & Infrastructure Lead', emoji: '🏗️' },\n  jason:     { name: 'Jason',     model: 'jason',     role: 'Full-Stack Engineer & Automation Developer', emoji: '⚙️' },\n  scaachi:   { name: 'Scaachi',   model: 'scaachi',   role: 'Marketing Lead & Content Strategist', emoji: '✍️' },\n  chidi:     { name: 'Chidi',     model: 'chidi',     role: 'Research Analyst & Intelligence Lead', emoji: '🔬' },\n};\n\nconst textLower = text.toLowerCase();\nconst explicitlyMentioned = [];\nfor (const [key, member] of Object.entries(MEMBERS)) {\n  if (textLower.includes(key)) {\n    explicitlyMentioned.push(key);\n  }\n}\n\n// Detect if this is a question (ends in ? or starts with question words)\nconst isQuestion = /\\?/.test(text) || /^(what|how|why|when|where|who|can|should|is|are|do|does|will|would|could|think|opinion)/i.test(text.trim());\n\n// Determine which members respond\nlet respondingMembers = [];\n\nif (explicitlyMentioned.length > 0) {\n  // Explicit mention → those members respond\n  respondingMembers = explicitlyMentioned;\n} else if (isQuestion) {\n  // Open question → 1-2 random members respond\n  const keys = Object.keys(MEMBERS);\n  const shuffled = keys.sort(() => Math.random() - 0.5);\n  const count = Math.random() < 0.35 ? 2 : 1; // 35% chance of 2 responses\n  respondingMembers = shuffled.slice(0, count);\n} else {\n  // Statement — 20% chance one member chimes in organically\n  if (Math.random() < 0.20) {\n    const keys = Object.keys(MEMBERS);\n    respondingMembers = [keys[Math.floor(Math.random() * keys.length)]];\n  }\n}\n\nif (respondingMembers.length === 0) {\n  return [{ json: { _skip: true } }];\n}\n\nconst memberDetails = respondingMembers.map(k => MEMBERS[k]);\n\nreturn [{ json: {\n  text,\n  userId,\n  channelId,\n  threadTs: threadTs || msgTs,\n  msgTs,\n  isQuestion,\n  explicitlyMentioned,\n  respondingMembers,\n  memberDetails,\n  _skip: false,\n}}];"
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\n\n// Handle Slack URL verification challenge\nif (body.type === 'url_verification') {\n  return [{ json: { challenge: body.challenge, _skip: true } }];\n}\n\nconst event = body.event || {};\nconst text = (event.text || '').trim();\nconst userId = event.user || '';\nconst channelId = event.channel || '';\nconst threadTs = event.thread_ts || event.ts || '';\nconst msgTs = event.ts || '';\nconst botId = event.bot_id || '';\n\n// Ignore bot messages (prevent loops)\nif (botId || event.subtype === 'bot_message') {\n  return [{ json: { _skip: true } }];\n}\n\n// Only process messages in #the-council\nconst COUNCIL_CHANNEL = 'C0AKVJ5PHHR';\nif (channelId !== COUNCIL_CHANNEL) {\n  return [{ json: { _skip: true } }];\n}\n\n// Detect which council members are mentioned (by name or @display name)\nconst MEMBERS = {\n  christian: { name: 'Christian', model: 'christian', role: 'Startup Strategist & Business Operator', emoji: '\ud83c\udfaf' },\n  kevin:     { name: 'Kevin',     model: 'kevin',     role: 'Systems Architect & Infrastructure Lead', emoji: '\ud83c\udfd7\ufe0f' },\n  jason:     { name: 'Jason',     model: 'jason',     role: 'Full-Stack Engineer & Automation Developer', emoji: '\u2699\ufe0f' },\n  scaachi:   { name: 'Scaachi',   model: 'scaachi',   role: 'Marketing Lead & Content Strategist', emoji: '\u270d\ufe0f' },\n  chidi:     { name: 'Chidi',     model: 'chidi',     role: 'Research Analyst & Intelligence Lead', emoji: '\ud83d\udd2c' },\n};\n\nconst textLower = text.toLowerCase();\nconst explicitlyMentioned = [];\nfor (const [key, member] of Object.entries(MEMBERS)) {\n  if (textLower.includes(key)) {\n    explicitlyMentioned.push(key);\n  }\n}\n\n// Detect if this is a question (ends in ? or starts with question words)\nconst isQuestion = /\\?/.test(text) || /^(what|how|why|when|where|who|can|should|is|are|do|does|will|would|could|think|opinion)/i.test(text.trim());\n\n// Determine which members respond\nlet respondingMembers = [];\n\nif (explicitlyMentioned.length > 0) {\n  // Explicit mention \u2192 those members respond\n  respondingMembers = explicitlyMentioned;\n} else if (isQuestion) {\n  // Open question \u2192 1-2 random members respond\n  const keys = Object.keys(MEMBERS);\n  const shuffled = keys.sort(() => Math.random() - 0.5);\n  const count = Math.random() < 0.35 ? 2 : 1; // 35% chance of 2 responses\n  respondingMembers = shuffled.slice(0, count);\n} else {\n  // Statement \u2014 20% chance one member chimes in organically\n  if (Math.random() < 0.20) {\n    const keys = Object.keys(MEMBERS);\n    respondingMembers = [keys[Math.floor(Math.random() * keys.length)]];\n  }\n}\n\nif (respondingMembers.length === 0) {\n  return [{ json: { _skip: true } }];\n}\n\nconst memberDetails = respondingMembers.map(k => MEMBERS[k]);\n\nreturn [{ json: {\n  text,\n  userId,\n  channelId,\n  threadTs: threadTs || msgTs,\n  msgTs,\n  isQuestion,\n  explicitlyMentioned,\n  respondingMembers,\n  memberDetails,\n  _skip: false,\n}}];"
       }
     },
     {
@@ -41,16 +50,26 @@
       "name": "Should Respond?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [680, 400],
+      "position": [
+        680,
+        400
+      ],
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
           "conditions": [
             {
               "id": "cond-skip",
               "leftValue": "={{ $json._skip }}",
               "rightValue": false,
-              "operator": { "type": "boolean", "operation": "equals" }
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -62,80 +81,35 @@
       "name": "Fetch Recent Channel Context",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 340],
+      "position": [
+        900,
+        340
+      ],
       "parameters": {
         "method": "GET",
         "url": "https://slack.com/api/conversations.history",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}" }]
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer ={{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
         },
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "channel", "value": "C0AKVJ5PHHR" },
-            { "name": "limit", "value": "15" }
+            {
+              "name": "channel",
+              "value": "C0AKVJ5PHHR"
+            },
+            {
+              "name": "limit",
+              "value": "15"
+            }
           ]
         }
-      }
-    },
-    {
-      "id": "a1b2c3d4-0006-4000-8000-000000000006",
-      "name": "Build Prompts Per Member",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1120, 340],
-      "parameters": {
-        "jsCode": "const parsed = $('Parse Message').first().json;\nconst historyData = $input.first().json;\n\n// Build channel context from recent messages\nconst messages = historyData.messages || [];\nconst contextLines = messages\n  .filter(m => !m.bot_id && m.text && m.text.trim())\n  .reverse()\n  .slice(0, 12)\n  .map(m => `<@${m.user || 'user'}>: ${m.text.replace(/<[^>]+>/g, '').trim()}`)\n  .join('\\n');\n\nconst channelContext = contextLines\n  ? `Recent conversation in #the-council:\\n${contextLines}\\n`\n  : '';\n\n// Build one prompt item per responding member\nconst items = parsed.memberDetails.map((member, idx) => {\n  // Add a stagger delay signal so multiple members don't reply simultaneously\n  const delaySeconds = idx * 4;\n\n  const systemAddendum = `\n\nCHANNEL CONTEXT — You are in #the-council, a shared Slack channel where all five AI council members (Christian, Kevin, Jason, Scaachi, Chidi) collaborate. Your colleagues may also respond to this message. Keep replies conversational, concise, and true to your personality — this is a discussion, not a formal report. 2-4 sentences is usually ideal unless depth is genuinely needed.\n\n${channelContext}`;\n\n  return {\n    json: {\n      ...parsed,\n      member,\n      delaySeconds,\n      systemAddendum,\n      promptForMember: `${channelContext}\\n<@${parsed.userId}> asks: ${parsed.text}`,\n    }\n  };\n});\n\nreturn items;"
-      }
-    },
-    {
-      "id": "a1b2c3d4-0007-4000-8000-000000000007",
-      "name": "Call Ollama — Member Response",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1340, 340],
-      "parameters": {
-        "method": "POST",
-        "url": "http://host.docker.internal:11434/api/chat",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
-        },
-        "sendBody": true,
-        "contentType": "json",
-        "body": "={{ (() => {\n  const d = $json;\n  return JSON.stringify({\n    model: d.member.model,\n    messages: [\n      {\n        role: 'system',\n        content: d.systemAddendum\n      },\n      {\n        role: 'user',\n        content: d.promptForMember\n      }\n    ],\n    stream: false,\n    options: { temperature: 0.6, num_ctx: 4096 }\n  });\n})() }}"
-      }
-    },
-    {
-      "id": "a1b2c3d4-0008-4000-8000-000000000008",
-      "name": "Format Member Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1560, 340],
-      "parameters": {
-        "jsCode": "const d = $('Build Prompts Per Member').first().json;\nconst ollamaResp = $input.first().json;\n\nconst rawReply = ollamaResp.message?.content || ollamaResp.response || '(no response)';\n\n// Format: emoji + bold name header, then the reply\nconst formattedReply = `${d.member.emoji} *${d.member.name}* — ${d.member.role}\\n\\n${rawReply}`;\n\nreturn [{ json: {\n  channelId: d.channelId,\n  threadTs: d.threadTs,\n  member: d.member,\n  formattedReply,\n  delaySeconds: d.delaySeconds,\n  payload: JSON.stringify({\n    channel: d.channelId,\n    thread_ts: d.threadTs,\n    text: formattedReply,\n    unfurl_links: false,\n  })\n}}];"
-      }
-    },
-    {
-      "id": "a1b2c3d4-0009-4000-8000-000000000009",
-      "name": "Post Reply to #the-council",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1780, 340],
-      "parameters": {
-        "method": "POST",
-        "url": "https://slack.com/api/chat.postMessage",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}" },
-            { "name": "Content-Type", "value": "application/json" }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "json",
-        "body": "={{ $json.payload }}"
       }
     },
     {
@@ -143,43 +117,123 @@
       "name": "No-op (Skipped)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 520],
+      "position": [
+        900,
+        520
+      ],
       "parameters": {
         "jsCode": "return [{ json: { skipped: true } }];"
       }
+    },
+    {
+      "id": "a1b2c3d4-00b0-4000-8000-000000000001",
+      "name": "Council Deliberation Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        340
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const parsed = $('Parse Message').first().json;\nconst historyData = $input.first().json;\nconst SLACK_TOKEN = $('Config').first().json.slackToken;\n\n// Helper: HTTPS POST/GET using Node built-in\nconst httpRequest = (url, opts = {}) => new Promise((resolve, reject) => {\n  const { URL } = require('url');\n  const https = require('https');\n  const http = require('http');\n  const parsed_url = new URL(url);\n  const client = parsed_url.protocol === 'https:' ? https : http;\n  const bodyStr = opts.body || '';\n  const headers = { ...(opts.headers || {}) };\n  if (bodyStr) headers['Content-Length'] = Buffer.byteLength(bodyStr);\n  const req = client.request({\n    hostname: parsed_url.hostname,\n    port: parsed_url.port,\n    path: parsed_url.pathname + parsed_url.search,\n    method: opts.method || 'GET',\n    headers,\n  }, (res) => {\n    let data = '';\n    res.on('data', chunk => data += chunk);\n    res.on('end', () => {\n      try { resolve(JSON.parse(data)); } catch { resolve(data); }\n    });\n  });\n  req.on('error', reject);\n  if (bodyStr) req.write(bodyStr);\n  req.end();\n});\n\n// Build initial channel context from recent human messages\nconst messages = historyData.messages || [];\nconst contextLines = messages\n  .filter(m => !m.bot_id && m.text && m.text.trim())\n  .reverse()\n  .slice(0, 12)\n  .map(m => `<@${m.user || 'user'}>: ${m.text.replace(/<[^>]+>/g, '').trim()}`)\n  .join('\\n');\n\nconst channelContext = contextLines\n  ? `Recent conversation in #the-council:\\n${contextLines}\\n\\n`\n  : '';\n\nconst { channelId, threadTs, userId, text: userText, memberDetails } = parsed;\n\nconst postedReplies = [];\n\nfor (let idx = 0; idx < memberDetails.length; idx++) {\n  const member = memberDetails[idx];\n\n  if (idx > 0) {\n    await new Promise(r => setTimeout(r, 4000));\n\n    const threadUrl = `https://slack.com/api/conversations.replies?channel=${channelId}&ts=${threadTs}&limit=20`;\n    const threadResp = await httpRequest(threadUrl, {\n      method: 'GET',\n      headers: { Authorization: `Bearer ${SLACK_TOKEN}` },\n    });\n\n    const botMessages = (threadResp.messages || [])\n      .filter(m => m.bot_id && m.text)\n      .map(m => m.text.replace(/<[^>]+>/g, '').trim())\n      .filter(Boolean);\n\n    if (botMessages.length > 0) {\n      postedReplies.length = 0;\n      postedReplies.push(...botMessages);\n    }\n  }\n\n  const systemPrompt = `You are ${member.name}, ${member.role} at Biula Tech.\n\nYou are in #the-council \u2014 a Slack channel where five AI council members advise on company matters. The other members are: Christian \ud83c\udfaf (Startup Strategist), Kevin \ud83c\udfd7\ufe0f (Systems Architect), Jason \u2699\ufe0f (Full-Stack Engineer), Scaachi \u270d\ufe0f (Marketing Lead), Chidi \ud83d\udd2c (Research Analyst).\n\nKeep replies conversational and concise \u2014 2-4 sentences unless genuine depth is needed. Respond in character, no bullet lists, natural dialogue.`;\n\n  let userPrompt;\n  if (postedReplies.length > 0) {\n    const priorContext = postedReplies\n      .slice(-3)\n      .map(r => r.substring(0, 400))\n      .join('\\n\\n---\\n\\n');\n    userPrompt = `${channelContext}<@${userId}> asks: ${userText}\\n\\n--- Council responses so far ---\\n${priorContext}\\n\\nNow respond as ${member.name}. Build on, challenge, or add nuance to what's been said.`;\n  } else {\n    userPrompt = `${channelContext}<@${userId}> asks: ${userText}`;\n  }\n\n  const ollamaBody = JSON.stringify({\n    model: member.model,\n    messages: [\n      { role: 'system', content: systemPrompt },\n      { role: 'user', content: userPrompt },\n    ],\n    stream: false,\n    options: { temperature: 0.65, num_ctx: 4096 },\n  });\n\n  const ollamaResp = await httpRequest('http://host.docker.internal:11434/api/chat', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: ollamaBody,\n  });\n\n  const rawReply = ollamaResp.message?.content || ollamaResp.response || '(no response)';\n  const formattedReply = `${member.emoji} *${member.name}* \u2014 ${member.role}\\n\\n${rawReply}`;\n\n  postedReplies.push(`${member.name}: ${rawReply}`);\n\n  await httpRequest('https://slack.com/api/chat.postMessage', {\n    method: 'POST',\n    headers: {\n      Authorization: `Bearer ${SLACK_TOKEN}`,\n      'Content-Type': 'application/json',\n    },\n    body: JSON.stringify({\n      channel: channelId,\n      thread_ts: threadTs,\n      text: formattedReply,\n      unfurl_links: false,\n    }),\n  });\n}\n\nreturn [{ json: { done: true, memberCount: memberDetails.length, channelId, threadTs } }];\n"
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-slack-token",
+              "name": "slackToken",
+              "value": "={{ $env.SLACK_BOT_TOKEN }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        900,
+        500
+      ]
     }
   ],
   "connections": {
     "Slack Event Webhook": {
-      "main": [[
-        { "node": "Respond 200 OK", "type": "main", "index": 0 },
-        { "node": "Parse Message", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Parse Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parse Message": {
-      "main": [[{ "node": "Should Respond?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Should Respond?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Should Respond?": {
       "main": [
-        [{ "node": "Fetch Recent Channel Context", "type": "main", "index": 0 }],
-        [{ "node": "No-op (Skipped)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Fetch Recent Channel Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No-op (Skipped)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Fetch Recent Channel Context": {
-      "main": [[{ "node": "Build Prompts Per Member", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Build Prompts Per Member": {
-      "main": [[{ "node": "Call Ollama — Member Response", "type": "main", "index": 0 }]]
-    },
-    "Call Ollama — Member Response": {
-      "main": [[{ "node": "Format Member Reply", "type": "main", "index": 0 }]]
-    },
-    "Format Member Reply": {
-      "main": [[{ "node": "Post Reply to #the-council", "type": "main", "index": 0 }]]
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Council Deliberation Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" },
-  "staticData": null,
-  "meta": { "templateCredsSetupCompleted": true },
-  "pinData": {}
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
 }

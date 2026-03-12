@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse the incoming Slack event and decide how to route it\nconst body = $input.first().json.body || {};\nconst eventType = body.type || '';\n\nif (eventType === 'url_verification') {\n  return [{ json: { route: 'challenge', challenge: body.challenge || '' } }];\n}\n\nconst event = body.event || {};\n\n// Ignore all bot messages to prevent loops\nif (event.bot_id || event.subtype === 'bot_message') {\n  return [{ json: { route: 'ignore' } }];\n}\n\nconst CHANNEL_MAP = {\n  'C0AKJ76RE7R': 'kevin',     // counsel-kevin\n  'C0ALCHR9A3B': 'jason',     // counsel-jason\n  'C0AKJ7918JK': 'scaachi',  // counsel-scaachi\n  'C0AKW7VNHHB': 'christian', // counsel-christian\n  'C0AKZLG3VFU': 'chidi',    // counsel-chidi\n  'C0AKXJSTRV4': 'kevin',     // tasks-kevin\n  'C0ALTUECBU0': 'jason',     // tasks-jason\n  'C0AKT93TZAP': 'scaachi',  // tasks-scaachi\n  'C0AKJ783FF1': 'christian', // tasks-christian\n  'C0AKJ787K7H': 'chidi'     // tasks-chidi\n};\n\nconst TASKS_CHANNELS = new Set([\n  'C0AKXJSTRV4', 'C0ALTUECBU0', 'C0AKT93TZAP', 'C0AKJ783FF1', 'C0AKJ787K7H'\n]);\n\nconst MODEL_MAP = {\n  kevin: 'kevin:latest', jason: 'jason:latest', scaachi: 'scaachi:latest',\n  christian: 'christian:latest', chidi: 'chidi:latest'\n};\n\nconst channelId = event.channel || '';\nconst userId = event.user || '';\nconst rawText = event.text || '';\nconst ts = event.ts || event.event_ts || '';\nconst agent = CHANNEL_MAP[channelId] || 'kevin';\nconst model = MODEL_MAP[agent];\n\n// Handle @mentions in any mapped channel\nif (event.type === 'app_mention') {\n  const userText = rawText.replace(/<@[A-Z0-9]+>/g, '').trim();\n\n  // Check for structured TASK: format in tasks channels\n  const taskMatch = userText.match(/TASK:\\s*(.+?)(?=\\nCONTEXT:|\\nPRIORITY:|$)/is);\n  const contextMatch = userText.match(/CONTEXT:\\s*(.+?)(?=\\nTASK:|\\nPRIORITY:|$)/is);\n  const priorityMatch = userText.match(/PRIORITY:\\s*(\\w+)/i);\n  const isTask = taskMatch && TASKS_CHANNELS.has(channelId);\n\n  let prompt = userText;\n  let taskTitle = '';\n  if (isTask) {\n    taskTitle = taskMatch[1].trim();\n    const ctx = contextMatch ? contextMatch[1].trim() : '';\n    const pri = priorityMatch ? priorityMatch[1] : 'normal';\n    prompt = `You have been assigned a task.\\n\\nTASK: ${taskTitle}${ctx ? '\\n\\nCONTEXT: ' + ctx : ''}\\n\\nPriority: ${pri}\\n\\nPlease provide a thorough, structured response.`;\n  }\n\n  return [{ json: { route: 'mention', channelId, userId, rawText, userText, prompt, ts, agent, model, isTask, taskTitle } }];\n}\n\n// Handle plain messages in tasks channels with TASK: prefix (no @mention needed)\nif (event.type === 'message' && TASKS_CHANNELS.has(channelId)) {\n  const taskMatch = rawText.match(/^TASK:\\s*(.+?)(?=\\nCONTEXT:|\\nPRIORITY:|$)/is);\n  if (!taskMatch) {\n    return [{ json: { route: 'ignore' } }];\n  }\n  const contextMatch = rawText.match(/CONTEXT:\\s*(.+?)(?=\\nTASK:|\\nPRIORITY:|$)/is);\n  const priorityMatch = rawText.match(/PRIORITY:\\s*(\\w+)/i);\n  const taskTitle = taskMatch[1].trim();\n  const ctx = contextMatch ? contextMatch[1].trim() : '';\n  const pri = priorityMatch ? priorityMatch[1] : 'normal';\n  const prompt = `You have been assigned a task.\\n\\nTASK: ${taskTitle}${ctx ? '\\n\\nCONTEXT: ' + ctx : ''}\\n\\nPriority: ${pri}\\n\\nPlease provide a thorough, structured response.`;\n  return [{ json: { route: 'mention', channelId, userId, rawText, userText: rawText, prompt, ts, agent, model, isTask: true, taskTitle } }];\n}\n\n// All other events: just ack\nreturn [{ json: { route: 'ignore' } }];"
+        "jsCode": "// Parse the incoming Slack event and decide how to route it\nconst body = $input.first().json.body || {};\nconst eventType = body.type || '';\n\nif (eventType === 'url_verification') {\n  return [{ json: { route: 'challenge', challenge: body.challenge || '' } }];\n}\n\nconst event = body.event || {};\n\n// Ignore all bot messages to prevent loops\nif (event.bot_id || event.subtype === 'bot_message') {\n  return [{ json: { route: 'ignore' } }];\n}\n\nconst CHANNEL_MAP = {\n  'C0AKJ76RE7R': 'kevin',     // counsel-kevin\n  'C0ALCHR9A3B': 'jason',     // counsel-jason\n  'C0AKJ7918JK': 'scaachi',  // counsel-scaachi\n  'C0AKW7VNHHB': 'christian', // counsel-christian\n  'C0AKZLG3VFU': 'chidi',    // counsel-chidi\n  'C0AKXJSTRV4': 'kevin',     // tasks-kevin\n  'C0ALTUECBU0': 'jason',     // tasks-jason\n  'C0AKT93TZAP': 'scaachi',  // tasks-scaachi\n  'C0AKJ783FF1': 'christian', // tasks-christian\n  'C0AKJ787K7H': 'chidi'     // tasks-chidi\n};\n\nconst TASKS_CHANNELS = new Set([\n  'C0AKXJSTRV4', 'C0ALTUECBU0', 'C0AKT93TZAP', 'C0AKJ783FF1', 'C0AKJ787K7H'\n]);\n\nconst MODEL_MAP = {\n  kevin: 'kevin:latest', jason: 'jason:latest', scaachi: 'scaachi:latest',\n  christian: 'christian:latest', chidi: 'chidi:latest'\n};\n\nconst channelId = event.channel || '';\nconst userId = event.user || '';\nconst rawText = event.text || '';\nconst ts = event.ts || event.event_ts || '';\nconst agent = CHANNEL_MAP[channelId] || 'kevin';\nconst model = MODEL_MAP[agent];\n\n// Handle @mentions in any mapped channel\nif (event.type === 'app_mention') {\n  const userText = rawText.replace(/<@[A-Z0-9]+>/g, '').trim();\n\n  // Check for structured TASK: format in tasks channels\n  const taskMatch = userText.match(/TASK:\\s*(.+?)(?=\\nCONTEXT:|\\nPRIORITY:|$)/is);\n  const contextMatch = userText.match(/CONTEXT:\\s*(.+?)(?=\\nTASK:|\\nPRIORITY:|$)/is);\n  const priorityMatch = userText.match(/PRIORITY:\\s*(\\w+)/i);\n  const isTask = taskMatch && TASKS_CHANNELS.has(channelId);\n\n  let prompt = userText;\n  let taskTitle = '';\n  if (isTask) {\n    taskTitle = taskMatch[1].trim();\n    const ctx = contextMatch ? contextMatch[1].trim() : '';\n    const pri = priorityMatch ? priorityMatch[1] : 'normal';\n    prompt = `You have been assigned a task.\\n\\nTASK: ${taskTitle}${ctx ? '\\n\\nCONTEXT: ' + ctx : ''}\\n\\nPriority: ${pri}\\n\\nPlease provide a thorough, structured response.`;\n  }\n\n  return [{ json: { route: 'mention', channelId, userId, rawText, userText, prompt, ts, agent, model, isTask, taskTitle } }];\n}\n\n// Handle plain messages in tasks channels with TASK: prefix (no @mention needed)\nif (event.type === 'message' && TASKS_CHANNELS.has(channelId)) {\n  const taskMatch = rawText.match(/^TASK:\\s*(.+?)(?=\\nCONTEXT:|\\nPRIORITY:|$)/is);\n  if (!taskMatch) {\n    return [{ json: { route: 'ignore' } }];\n  }\n  const contextMatch = rawText.match(/CONTEXT:\\s*(.+?)(?=\\nTASK:|\\nPRIORITY:|$)/is);\n  const priorityMatch = rawText.match(/PRIORITY:\\s*(\\w+)/i);\n  const taskTitle = taskMatch[1].trim();\n  const ctx = contextMatch ? contextMatch[1].trim() : '';\n  const pri = priorityMatch ? priorityMatch[1] : 'normal';\n  const prompt = `You have been assigned a task.\\n\\nTASK: ${taskTitle}${ctx ? '\\n\\nCONTEXT: ' + ctx : ''}\\n\\nPriority: ${pri}\\n\\nPlease provide a thorough, structured response.`;\n  return [{ json: { route: 'mention', channelId, userId, rawText, userText: rawText, prompt, ts, agent, model, isTask: true, taskTitle } }];\n}\n\n\n// Handle #the-council \u2014 forward to Council Deliberation Engine\nif (channelId === 'C0AKVJ5PHHR' && event.type === 'message') {\n  return [{ json: { route: 'council', body: body, channelId, userId, ts } }];\n}\n\n// All other events: just ack\nreturn [{ json: { route: 'ignore' } }];"
       },
       "id": "node-router",
       "name": "Route Event",
@@ -34,7 +34,7 @@
     {
       "parameters": {
         "mode": "expression",
-        "output": "={{ $json.route === 'challenge' ? 0 : $json.route === 'mention' ? 1 : 2 }}",
+        "output": "={{ $json.route === 'challenge' ? 0 : $json.route === 'council' ? 3 : $json.route === 'mention' ? 1 : 2 }}",
         "options": {}
       },
       "id": "node-switch",
@@ -171,6 +171,52 @@
         1520,
         300
       ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": true}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-ack-council",
+      "name": "Ack Council",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        900,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/the-council",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "node-forward-council",
+      "name": "Forward to Council",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        600
+      ],
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -218,6 +264,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Ack Council",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -253,10 +306,22 @@
           }
         ]
       ]
+    },
+    "Ack Council": {
+      "main": [
+        [
+          {
+            "node": "Forward to Council",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
   },
-  "active": false
+  "active": false,
+  "id": "f5rTNCSNGXwKiwvE"
 }
