@@ -151,6 +151,9 @@ After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhanc
 - Backup cron + export cron: confirmed in crontab (3am backup, 2am export) ✅
 - Stale top-level workflows/ stubs retired; canonical location is services/n8n/workflows/ ✅
 - sqlite3 installed; backup script verified — 11MB SQLite + .env captured to /home/biulatech/backups/n8n/ ✅
+- n8n workflow_published_version table populated (16 rows) — n8n v2.11.3 requires this for UI display; all 16 workflows now visible ✅
+- ComfyUI ae.safetensors: download script updated to pass HF_TOKEN env var for gated HuggingFace repos ✅
+- ComfyUI workflows activated (t2i, t2v, enhance) — /image /video /enhance now live ✅
 
 ---
 
@@ -213,3 +216,4 @@ After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhanc
 | 2026-03-12 | Created systemd units for Ollama override (OLLAMA_HOST=0.0.0.0), ngrok, gpu-exporter. Added GPU Prometheus exporter script, backup-n8n.sh, export-workflows.sh. Fixed Mac→Pop!_OS inaccuracies in docs. Scrubbed credentials from ROADMAP.md. Added ADR-011 (Ollama systemd strategy). Standardized studio-* channel naming. Updated decisions.md. |
 | 2026-03-12 | Validated all 10 webhook paths (10/10 passing). Fixed news-article-generator (responseMode, continueOnFail, Post to Slack URL + auth). Added Slack Events Receiver → #the-council routing (Switch Route + Ack Council + Forward to Council nodes). Fixed Council JS Task Runner sandbox issues: Config Set node for $env workaround, replaced $helpers/fetch with require('https') helper, added NODE_FUNCTION_ALLOW_BUILTIN=* to docker-compose. Tested The Council end-to-end — Chidi responded in #the-council ✅. Exported all active workflows + docker-compose to git. |
 | 2026-03-12 | Re-evaluated plan against actual repo state. Fixed jason.Modelfile path (~/ai-workers → ~/ai-workers-1), retired stale top-level workflows/ stubs (3 JSON files), added services/n8n/workflows/README.md. Confirmed llama3.1:70b alias + backup/export crons already present. Wired agent→Linear update loop: updated Slack Events Receiver to route TASK: messages in #tasks-* to Tasks Channel Handler (/webhook/slack-tasks) via new Switch[4] → Ack Task → Forward to Tasks nodes. Tasks Channel Handler already had complete Ollama+Linear+studio flow. |
+| 2026-03-12 | Fixed ComfyUI ae.safetensors download (HF_TOKEN support added to script). Populated workflow_published_version table (n8n v2.11.3 requires this for UI to display workflows). All 16 workflows now visible and active in n8n UI. ComfyUI t2i/t2v/enhance workflows activated — /image /video /enhance live. |
