@@ -23,15 +23,16 @@
 
 | Service | Port | Binding | Status | Notes |
 |---------|------|---------|--------|-------|
-| n8n | 5678 | 0.0.0.0 | ✅ Running | Workflow orchestrator (Docker on Mac) |
-| Ollama | 11434 | **127.0.0.1 ONLY** | ✅ Running | ⚠️ Must change to 0.0.0.0 — see Blockers |
+| n8n | 5678 | 0.0.0.0 | ✅ Running | Workflow orchestrator (Docker on Pop!_OS) |
+| Ollama | 11434 | **0.0.0.0** | ✅ Running | systemd override applied — Council, /pm, Digest unblocked |
 | Open WebUI | 8080 | 0.0.0.0 | ✅ Running | Chat UI for Ollama |
 | ComfyUI | 8188 | 0.0.0.0 | ✅ Running | Image/video gen — no model checkpoints yet |
 | Grafana | 3001 | 0.0.0.0 | ✅ Running | v12.4.1, monitoring hub |
-| Prometheus | 9090 | 0.0.0.0 | ✅ Running | Metrics backend |
-| ngrok | 4040 | **127.0.0.1 ONLY** | ✅ Running | ⚠️ Web UI not reachable by Docker containers |
+| Prometheus | 9090 | 0.0.0.0 | ✅ Running | Metrics backend + GPU exporter on :9835 |
+| ngrok | 4040 | **0.0.0.0** | ✅ Running | systemd service, web UI reachable by Docker |
+| GPU exporter | 9835 | 0.0.0.0 | ✅ Running | NVIDIA metrics → Prometheus |
 
-**Critical networking note:** n8n runs inside Docker. Docker containers use `host.docker.internal` (resolves to Docker bridge gateway, NOT 127.0.0.1) to reach the Mac host. Ollama must bind to `0.0.0.0` for this to work.
+**Critical networking note:** n8n runs inside Docker. Docker containers use `host.docker.internal` (resolves to Docker bridge gateway, NOT 127.0.0.1) to reach the Pop!_OS host. Ollama must bind to `0.0.0.0` for this to work.
 
 ---
 
@@ -112,39 +113,30 @@
 - URL: `http://localhost:3001` — login: `admin` / `biulatech`
 - Dashboard: `ai-workers-hub` (UID: `biulatech-ai-hub`)
 - File: `/home/biulatech/monitoring/grafana/dashboards/ai-workers-hub.json`
-- Panels: n8n ✅, Ollama ⬇️ (binding), Open WebUI ✅, ComfyUI ✅, ngrok ⬇️ (binding)
+- Panels: n8n ✅, Ollama ✅ (fixed), Open WebUI ✅, ComfyUI ✅, ngrok ✅ (fixed), GPU exporter ✅
 - Live: CPU%, RAM, Disk, Uptime, Service Uptime timeseries, Quick Links
 
 ---
 
-## Critical Blockers (User Action Required)
+## Current Blockers
 
-### 1. 🔴 Ollama binding — blocks Weekly News Digest, Linear PM, Council
-**Fix (Mac terminal):**
+### 1. 🟡 ComfyUI — no model checkpoints
+**Fix:** Run the existing download script (FLUX.1-schnell, ~20GB, use tmux):
 ```bash
-launchctl setenv OLLAMA_HOST "0.0.0.0"
-# Restart Ollama (quit app and reopen, or kill + restart)
-pkill ollama && sleep 2 && ollama serve
+tmux new-session -d -s comfyui-dl 'bash /home/biulatech/ai-workers-1/scripts/download-comfyui-models.sh 2>&1 | tee /tmp/comfyui-dl.log'
 ```
-After this, Weekly News Digest and /pm will work; Grafana Ollama probe will go green.
+After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhance) in the n8n UI.
 
-### 2. 🟠 Linear PM model name mismatch
-**Problem:** Workflow calls `llama3.1:70b` but Ollama has `llama3.1:70b-instruct-q5_K_M`.
-**Fix (quickest — create alias):**
-```bash
-ollama cp llama3.1:70b-instruct-q5_K_M llama3.1:70b
-```
+### 2. 🟡 n8n workflow credentials
+8 workflow JSON exports show `CONFIGURE_IN_N8N_CREDENTIALS` placeholder for Slack bot token.
+**Fix:** n8n UI → Credentials → update "Slack Bot Token" with the rotated token from `~/n8n/.env`.
 
-### 3. 🟡 ngrok web UI binding — affects Grafana probe only
-Config already updated at `~/.config/ngrok/ngrok.yml` with `web_addr: "0.0.0.0:4040"`.
-**Fix:** Restart ngrok (kill + relaunch, or use ngrok dashboard).
-
-### 4. 🟡 ComfyUI — no model checkpoints
-**Fix:** Download a Stable Diffusion or FLUX checkpoint to `/home/biulatech/ComfyUI/models/checkpoints/`, then activate the 3 ComfyUI n8n workflows.
-
-### 5. 🟡 n8n API key (Grafana integration)
-Key was added to database, needs n8n restart to take effect.
-**Fix:** `cd ~/n8n && docker compose restart`
+### ✅ Previously resolved
+- Ollama binding: `0.0.0.0:11434` — systemd override applied 2026-03-12
+- ngrok web UI: `0.0.0.0:4040` — systemd service installed 2026-03-12, config indentation fixed
+- GPU exporter: running on `0.0.0.0:9835` — Prometheus scraping
+- Slack credentials: rotated + purged from git history 2026-03-12
+- n8n API key: activated (n8n restarted 2026-03-12)
 
 ---
 
@@ -155,8 +147,8 @@ Key was added to database, needs n8n restart to take effect.
 | 0 | Foundation | ✅ Complete |
 | 1 | Slack Integration | ✅ Complete |
 | 2 | Slack ↔ Ollama | ✅ Complete |
-| 3 | Slash Commands | 🔄 Partial (/image /video broken) |
-| 4 | Ops Automation | 🔄 Partial (GPU alerts missing) |
+| 3 | Slash Commands | 🔄 Partial (/image /video /enhance blocked by ComfyUI) |
+| 4 | Ops Automation | 🔄 Partial (GPU exporter ✅, Grafana alert rule pending) |
 | 5 | Task Management | 🔄 Partial (agent→issue update loop missing) |
 | 6 | Generative Output Feeds | ❌ Blocked (ComfyUI no models) |
 | 7 | Domain Hardening | ⏳ Future |
@@ -165,19 +157,19 @@ Key was added to database, needs n8n restart to take effect.
 
 ## Pending Work
 
-- [ ] **Fix Ollama binding** → enables Council, Weekly Digest, /pm, Linear PM
-- [ ] **Fix Linear PM model name** → `ollama cp llama3.1:70b-instruct-q5_K_M llama3.1:70b`
-- [ ] **Download ComfyUI checkpoint** → enables /image /video /enhance
-- [ ] **Activate ComfyUI n8n workflows** (3 workflows: t2i, t2v, enhance)
-- [ ] **Test /pm end-to-end** after Ollama fix
-- [ ] **Test Weekly News Digest** after Ollama fix (re-run Execute workflow in n8n)
-- [ ] **Agent → Linear update loop** — agent completes task → updates Linear issue → posts to #studio-*
-- [ ] **GPU utilization alerts** → #ops-alerts (threshold: >90% for 5 min)
-- [ ] **Export n8n workflows to git** — `ai-workers-1/workflows/` has old stubs; export current workflows
-- [ ] **Domain setup** — n8n.biulatech.com (biulatech.com on Wix; see ADR-015 for migration path)
-- [ ] **Automated backups** — n8n_data SQLite + .env → cloud storage
+- [ ] **Download ComfyUI checkpoint** → enables /image /video /enhance (`scripts/download-comfyui-models.sh`)
+- [ ] **Activate ComfyUI n8n workflows** (3 workflows: t2i, t2v, enhance) — after model download
+- [ ] **Test /pm end-to-end** — Ollama now on 0.0.0.0, should work
+- [ ] **Test Weekly News Digest** — re-trigger in n8n UI (Ollama now reachable)
+- [ ] **Test The Council** — post to #the-council (Ollama now reachable)
+- [ ] **Add Grafana alert rule** for GPU >90% → n8n webhook → #ops-alerts
+- [ ] **Agent → Linear update loop** — agent completes task → updates Linear issue → posts to #studio-blueprint / #studio-forge / #studio-quill
+- [ ] **Export n8n workflows to git** — run `scripts/maintenance/export-workflows.sh` after confirming n8n API works
+- [ ] **Set up backup cron** — `sudo apt install sqlite3` then add cron for `scripts/maintenance/backup-n8n.sh`
+- [ ] **Update n8n credentials** — 8 workflows show `CONFIGURE_IN_N8N_CREDENTIALS` for bot token
+- [ ] **Domain setup** — n8n.biulatech.com (biulatech.com on Wix; see ADR-016 for migration path)
 - [ ] **Streaming responses** — chunk long Ollama outputs into multiple Slack messages
-- [ ] **Clean up ai-workers-1** — duplicate repo at `/home/biulatech/ai-workers-1`
+- [ ] **Merge PR #1** → pull to main → set up cron jobs
 
 ---
 
@@ -206,3 +198,4 @@ Key was added to database, needs n8n restart to take effect.
 |------|-----------|
 | 2026-03-11 | Infrastructure, ngrok, personalities, Slack channels, slash commands, /ai → Ollama, /ai-status, dual-channel ops posting, events receiver, /ai-diagnose, daily digest, GitHub push handler, Linear integration (replaced Plane), council router |
 | 2026-03-12 | Rebuilt Council deliberation (sequential engine, thread-aware). Set up Grafana dashboard. Activated Weekly News Digest. Activated Linear AI Project Manager. Added /pm to Slack Command Handler. Identified: Ollama 127.0.0.1 binding is the primary blocker. |
+| 2026-03-12 | Created systemd units for Ollama override (OLLAMA_HOST=0.0.0.0), ngrok, gpu-exporter. Added GPU Prometheus exporter script, backup-n8n.sh, export-workflows.sh. Fixed Mac→Pop!_OS inaccuracies in docs. Scrubbed credentials from ROADMAP.md. Added ADR-011 (Ollama systemd strategy). Standardized studio-* channel naming. Updated decisions.md. |

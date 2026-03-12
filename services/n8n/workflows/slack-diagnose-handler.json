@@ -107,7 +107,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+              "value": "Bearer CONFIGURE_IN_N8N_CREDENTIALS"
             }
           ]
         },
@@ -165,7 +165,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer REDACTED_SLACK_BOT_TOKEN"
+              "value": "Bearer CONFIGURE_IN_N8N_CREDENTIALS"
             },
             {
               "name": "Content-Type",
