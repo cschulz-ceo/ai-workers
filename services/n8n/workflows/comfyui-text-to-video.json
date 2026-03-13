@@ -1,10 +1,8 @@
 {
-  "id": "comfyui-t2v-001",
   "name": "ComfyUI Text to Video",
-  "active": false,
   "nodes": [
     {
-      "id": "v-webhook",
+      "id": "52ccd298-7dc7-4788-9cc8-95a0af017a86",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -21,7 +19,7 @@
       "webhookId": "comfyui-video-wh"
     },
     {
-      "id": "v-ack-wh",
+      "id": "c289e236-e4e1-4295-9fea-0a19748046e1",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -36,7 +34,7 @@
       }
     },
     {
-      "id": "v-ack-slack",
+      "id": "2bacadb8-47dc-4aa7-a2a2-2fcd58ac2ea5",
       "name": "Ack Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -58,11 +56,11 @@
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ JSON.stringify({ channel: $json.body.channel_id || 'C0AKJ788GJK', text: ':film_frames: *Generating video...*\\n> ' + ($json.body.prompt || '') + '\\n_This takes 1-3 minutes_' }) }}"
+        "body": "={{ JSON.stringify({ channel: $json.body.channel_id || 'C0AKJ788GJK', text: ':film_frames: *Generating video...*\\n> ' + ($json.body.prompt || body.text || '') + '\\n_This takes 1-3 minutes_' }) }}"
       }
     },
     {
-      "id": "v-enhance",
+      "id": "58be9c34-6382-445d-bd65-7dc66028eefa",
       "name": "Enhance Prompt",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -74,12 +72,22 @@
         "method": "POST",
         "url": "http://host.docker.internal:11434/api/chat",
         "sendBody": true,
-        "contentType": "json",
-        "body": "={{ JSON.stringify({ model: 'llama3.1:70b', stream: false, messages: [ { role: 'system', content: 'You are an expert at writing AnimateDiff video generation prompts. Create a detailed, motion-rich prompt that describes movement, camera angles, and visual dynamics. Return ONLY the enhanced prompt (max 100 words).' }, { role: 'user', content: $('Webhook').first().json.body.prompt || '' } ] }) }}"
+        "contentType": "raw",
+        "body": "={{ JSON.stringify({ model: 'llama3.1:70b', stream: false, messages: [ { role: 'system', content: 'You are an expert at writing AnimateDiff video generation prompts. Create a detailed, motion-rich prompt that describes movement, camera angles, and visual dynamics. Return ONLY the enhanced prompt (max 100 words).' }, { role: 'user', content: $('Webhook').first().json.body.prompt || body.text || '' } ] }) }}",
+        "rawContentType": "application/json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
       }
     },
     {
-      "id": "v-build",
+      "id": "c9ebc971-b308-4add-bc4a-723a8cc70897",
       "name": "Build ComfyUI Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -88,11 +96,11 @@
         420
       ],
       "parameters": {
-        "jsCode": "\nconst raw = $('Webhook').first().json.body || {};\nconst enhanced = $input.first().json.message?.content || raw.prompt || 'a cinematic scene';\nconst channelId = raw.channel_id || 'C0AKJ788GJK';\nconst userId    = raw.user_id    || '';\nconst clientId  = 'n8n-vid-' + Date.now();\nconst seed = Math.floor(Math.random() * 1_000_000_000);\n\n// AnimateDiff-Evolved + SDXL ComfyUI workflow\nconst workflow = {\n  \"1\": { \"inputs\": {\"ckpt_name\": \"sd_xl_base_1.0.safetensors\"}, \"class_type\": \"CheckpointLoaderSimple\" },\n  \"2\": { \"inputs\": {\"text\": enhanced, \"clip\": [\"1\",1]}, \"class_type\": \"CLIPTextEncode\" },\n  \"3\": { \"inputs\": {\"text\": \"blurry, low quality, distorted, watermark, static, frozen\", \"clip\": [\"1\",1]}, \"class_type\": \"CLIPTextEncode\" },\n  \"4\": {\n    \"inputs\": {\n      \"model\": [\"1\",0],\n      \"model_name\": \"v3_sd15_mm.ckpt\",\n      \"beta_schedule\": \"sqrt_linear (AnimateDiff)\",\n      \"motion_scale\": 1.0,\n      \"apply_v2_models_properly\": True\n    },\n    \"class_type\": \"ADE_AnimateDiffLoaderWithContext\"\n  },\n  \"5\": {\n    \"inputs\": {\n      \"seed\": seed, \"steps\": 20, \"cfg\": 7.5,\n      \"sampler_name\": \"euler_ancestral\", \"scheduler\": \"karras\", \"denoise\": 1.0,\n      \"model\": [\"4\",0], \"positive\": [\"2\",0], \"negative\": [\"3\",0], \"latent_image\": [\"6\",0]\n    },\n    \"class_type\": \"KSampler\"\n  },\n  \"6\": { \"inputs\": {\"width\": 768, \"height\": 512, \"batch_size\": 16}, \"class_type\": \"EmptyLatentImage\" },\n  \"7\": { \"inputs\": {\"samples\": [\"5\",0], \"vae\": [\"1\",2]}, \"class_type\": \"VAEDecode\" },\n  \"8\": {\n    \"inputs\": {\n      \"frame_rate\": 8, \"loop_count\": 0,\n      \"filename_prefix\": \"n8n_video\",\n      \"format\": \"image/gif\",\n      \"pingpong\": False, \"save_output\": True,\n      \"images\": [\"7\",0]\n    },\n    \"class_type\": \"VHS_VideoCombine\"\n  }\n};\n\nreturn [{ json: { workflow, clientId, channelId, userId, prompt: enhanced } }];\n"
+        "jsCode": "\nconst raw = $('Webhook').first().json.body || {};\nconst enhanced = $input.first().json.message?.content || raw.prompt || 'a cinematic scene';\nconst channelId = raw.channel || raw.channel_id || 'C0AKJ788GJK';\nconst userId    = raw.user_id || raw.user    || '';\nconst clientId  = 'n8n-vid-' + Date.now();\nconst seed = Math.floor(Math.random() * 1_000_000_000);\n\n// AnimateDiff-Evolved + SDXL ComfyUI workflow\nconst workflow = {\n  \"1\": { \"inputs\": {\"ckpt_name\": \"sd_xl_base_1.0.safetensors\"}, \"class_type\": \"CheckpointLoaderSimple\" },\n  \"2\": { \"inputs\": {\"text\": enhanced, \"clip\": [\"1\",1]}, \"class_type\": \"CLIPTextEncode\" },\n  \"3\": { \"inputs\": {\"text\": \"blurry, low quality, distorted, watermark, static, frozen\", \"clip\": [\"1\",1]}, \"class_type\": \"CLIPTextEncode\" },\n  \"4\": {\n    \"inputs\": {\n      \"model\": [\"1\",0],\n      \"model_name\": \"v3_sd15_mm.ckpt\",\n      \"beta_schedule\": \"sqrt_linear (AnimateDiff)\",\n      \"motion_scale\": 1.0,\n      \"apply_v2_models_properly\": True\n    },\n    \"class_type\": \"ADE_AnimateDiffLoaderWithContext\"\n  },\n  \"5\": {\n    \"inputs\": {\n      \"seed\": seed, \"steps\": 20, \"cfg\": 7.5,\n      \"sampler_name\": \"euler_ancestral\", \"scheduler\": \"karras\", \"denoise\": 1.0,\n      \"model\": [\"4\",0], \"positive\": [\"2\",0], \"negative\": [\"3\",0], \"latent_image\": [\"6\",0]\n    },\n    \"class_type\": \"KSampler\"\n  },\n  \"6\": { \"inputs\": {\"width\": 768, \"height\": 512, \"batch_size\": 16}, \"class_type\": \"EmptyLatentImage\" },\n  \"7\": { \"inputs\": {\"samples\": [\"5\",0], \"vae\": [\"1\",2]}, \"class_type\": \"VAEDecode\" },\n  \"8\": {\n    \"inputs\": {\n      \"frame_rate\": 8, \"loop_count\": 0,\n      \"filename_prefix\": \"n8n_video\",\n      \"format\": \"image/gif\",\n      \"pingpong\": False, \"save_output\": True,\n      \"images\": [\"7\",0]\n    },\n    \"class_type\": \"VHS_VideoCombine\"\n  }\n};\n\nreturn [{ json: { workflow, clientId, channelId, userId, prompt: enhanced } }];\n"
       }
     },
     {
-      "id": "v-submit",
+      "id": "bcc88ca1-5e22-43a1-985f-6a5a229223ed",
       "name": "Submit to ComfyUI",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -109,7 +117,7 @@
       }
     },
     {
-      "id": "v-poll",
+      "id": "15ff9e06-0727-44fd-8743-e1422fdfdd0d",
       "name": "Poll Until Done",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -122,7 +130,7 @@
       }
     },
     {
-      "id": "v-download",
+      "id": "46535098-b2fc-4551-81a5-eb1c4d2d7272",
       "name": "Download Video",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -144,7 +152,7 @@
       }
     },
     {
-      "id": "v-upload",
+      "id": "b11b347d-6ab4-4844-83c3-09e0f7273539",
       "name": "Upload to Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -277,5 +285,11 @@
         ]
       ]
     }
-  }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {},
+  "active": true,
+  "id": "comfyui-t2v-001"
 }

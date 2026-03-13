@@ -1,5 +1,5 @@
 # Biulatech AI Workers — Session Context File
-**Last updated:** 2026-03-12 (session 4)
+**Last updated:** 2026-03-13 (session 5)
 **Purpose:** Context retention across Claude sessions. Update this file at the end of each working session.
 
 ---
@@ -89,7 +89,7 @@
 | `/ai [agent:] text` | ✅ Working | — |
 | `/ai-status` | ✅ Working | — |
 | `/ai-diagnose` | ✅ Working | — |
-| `/pm text` | ⚠️ Likely working | Model name mismatch: `llama3.1:70b` vs `llama3.1:70b-instruct-q5_K_M` — create alias to confirm |
+| `/pm text` | ✅ Working | Tested 2026-03-13 — Ollama classifies, Linear issue created, Slack confirm posted |
 | `/image prompt` | ❌ Broken | ComfyUI no models |
 | `/video prompt` | ❌ Broken | ComfyUI no models |
 | `/enhance url` | ❌ Broken | ComfyUI no models |
@@ -105,7 +105,7 @@
 - **Thread-aware:** Each member after the first calls `conversations.replies` to read prior responses before generating their own
 - **Member order:** christian → kevin → jason → scaachi
 - **Auth:** Config Set node → `$('Config').first().json.slackToken` (JS Task Runner blocks `$env` in Code nodes; Set node expressions run in main process and have $env access)
-- **HTTP:** Uses `require('https')` + `require('url')` based helper (fetch and $helpers not available in task runner sandbox). Requires `NODE_FUNCTION_ALLOW_BUILTIN=*` in docker-compose.
+- **HTTP:** Uses `require('https')` + regex URL parser (URL class removed from n8n sandbox; `require('url').URL` replaced with regex). Requires `NODE_FUNCTION_ALLOW_BUILTIN=*` in docker-compose.
 - **Ollama endpoint:** `http://host.docker.internal:11434/api/chat` ✅ Working (Ollama binding fixed)
 - **Tested:** 2026-03-12 — Chidi responded to question in #the-council ✅
 
@@ -130,9 +130,13 @@ tmux new-session -d -s comfyui-dl 'bash /home/biulatech/ai-workers-1/scripts/dow
 ```
 After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhance) in the n8n UI.
 
-### 2. 🟡 n8n workflow credentials
-8 workflow JSON exports show `CONFIGURE_IN_N8N_CREDENTIALS` placeholder for Slack bot token.
-**Fix:** n8n UI → Credentials → update "Slack Bot Token" with the rotated token from `~/n8n/.env`.
+### 2. 🟡 ComfyUI workflows — no model checkpoints
+ComfyUI t2i, t2v, enhance workflows are activated but ComfyUI has no checkpoint models.
+**Fix:** Run the download script (FLUX.1-schnell requires HF_TOKEN + license acceptance):
+```bash
+# Accept license at huggingface.co/black-forest-labs/FLUX.1-schnell first
+HF_TOKEN=<your_token> tmux new-session -d -s comfyui-dl 'bash /home/biulatech/ai-workers-1/scripts/download-comfyui-models.sh 2>&1 | tee /tmp/comfyui-dl.log'
+```
 
 ### ✅ Previously resolved
 - Ollama binding: `0.0.0.0:11434` — systemd override applied 2026-03-12
@@ -154,6 +158,17 @@ After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhanc
 - n8n workflow_published_version table populated (16 rows) — n8n v2.11.3 requires this for UI display; all 16 workflows now visible ✅
 - ComfyUI ae.safetensors: download script updated to pass HF_TOKEN env var for gated HuggingFace repos ✅
 - ComfyUI workflows activated (t2i, t2v, enhance) — /image /video /enhance now live ✅
+- **Session 5 (2026-03-13) workflow health recovery:**
+  - Root cause discovered: n8n loads from `workflow_history` table (version snapshots), NOT `workflow_entity.nodes` directly. All prior sprint fixes were in wrong table. Fixed by creating new `workflow_history` entries with `versionId` updates.
+  - The Council: replaced `require('url').URL` with regex URL parser (URL class unavailable in n8n sandbox) ✅
+  - Slack Events Receiver: Post Response auth header `CONFIGURE_IN_N8N_CREDENTIALS` → `={{ $env.SLACK_BOT_TOKEN }}` ✅
+  - News Article Generator: expression typo `={=` → `={{` in Post to Slack body ✅
+  - ComfyUI T2I, T2V + Linear PM: Ollama calls `contentType: json` → `contentType: raw` + `rawContentType: application/json` (double-encoding fix) ✅
+  - Slack Command Handler: Ack Slack node had corrupted `responseBody` expression (nested `{{ }}`) — fixed ✅
+  - Slack Command Handler: Call Studio Image/Video/Enhance sent empty body — added proper body params (prompt/image_url/channel_id/user_id) ✅
+  - Linear PM: Merge Paths node `mode: passThrough` invalid in Merge v3 → changed to `mode: append` ✅
+  - **Tested:** `/ai kevin` ✅, `/pm Create test task` ✅ (Linear PM exec 530 success), Slack Events Receiver app_mention ✅
+  - n8n now reports **8 published workflows** on startup
 
 ---
 
@@ -176,13 +191,12 @@ After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhanc
 
 - [ ] **Download ComfyUI checkpoint** → enables /image /video /enhance (`scripts/download-comfyui-models.sh`)
 - [ ] **Activate ComfyUI n8n workflows** (3 workflows: t2i, t2v, enhance) — after model download
-- [ ] **Test /pm end-to-end** — run `/pm Create test issue` in Slack → expect Linear issue + Slack confirm
-- [ ] **Test Tasks Channel Handler** — post `TASK: write a hello world in Python` in #tasks-kevin → expect Ollama → Linear issue → #studio-blueprint + thread reply
+- [x] **Test /pm end-to-end** ✅ — exec 530 success 2026-03-13
+- [ ] **Test Tasks Channel Handler in Slack** — post `TASK: write a hello world in Python` in #tasks-kevin → expect Ollama → Linear issue → #studio-blueprint + thread reply
 - [ ] **Test Weekly News Digest** — re-trigger in n8n UI (Execute button), verify Slack post in #ops-digest
+- [ ] **Test Ops GPU Alert** — manual trigger in n8n UI → verify Slack post in #ops-alerts
+- [ ] **Download ComfyUI models** (HF_TOKEN required) → enables /image /video /enhance
 - [ ] **Add Grafana alert rule** for GPU >90% → n8n webhook → #ops-alerts (Grafana UI: Alerting → Alert rules → New)
-- [ ] **Update n8n credentials** — workflows show `CONFIGURE_IN_N8N_CREDENTIALS` for bot token (n8n UI → Credentials → Slack Bot Token)
-- [ ] **Download ComfyUI checkpoint** → enables /image /video /enhance (`scripts/download-comfyui-models.sh`)
-- [ ] **Activate ComfyUI n8n workflows** — after model download (t2i, t2v, enhance — activate in n8n UI)
 - [ ] **Domain setup** — n8n.biulatech.com (biulatech.com on Wix; see ADR-016 for migration path)
 
 ---

@@ -1,10 +1,8 @@
 {
-  "id": "comfyui-enh-001",
   "name": "ComfyUI Image Enhance",
-  "active": false,
   "nodes": [
     {
-      "id": "e-webhook",
+      "id": "5fbd167b-74e7-40b8-a38f-f025772995a2",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -21,7 +19,7 @@
       "webhookId": "comfyui-enhance-wh"
     },
     {
-      "id": "e-ack-wh",
+      "id": "a23a8c38-deb1-4ba5-b405-63ffe781a4ff",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -36,7 +34,7 @@
       }
     },
     {
-      "id": "e-ack-slack",
+      "id": "d03aa85a-c5d9-4631-8a0f-d803ebd097a7",
       "name": "Ack Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -62,7 +60,7 @@
       }
     },
     {
-      "id": "e-download-src",
+      "id": "1a021eee-d633-4671-af03-d9a30ba7fe70",
       "name": "Download Source Image",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -84,7 +82,7 @@
       }
     },
     {
-      "id": "e-upload-src",
+      "id": "d0b66a10-602f-441a-a6b7-3296b3b81891",
       "name": "Upload to ComfyUI",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -117,7 +115,7 @@
       }
     },
     {
-      "id": "e-build",
+      "id": "56fbccb6-fe6e-447d-9319-4dcf58cd3dd9",
       "name": "Build Enhance Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -130,7 +128,7 @@
       }
     },
     {
-      "id": "e-submit",
+      "id": "981b1658-9bd9-4471-aaf4-b70fc415ee2e",
       "name": "Submit to ComfyUI",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -147,7 +145,7 @@
       }
     },
     {
-      "id": "e-poll",
+      "id": "0082fad1-4f16-4816-b6e9-095afbbffa2b",
       "name": "Poll Until Done",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -160,7 +158,7 @@
       }
     },
     {
-      "id": "e-download",
+      "id": "cda07d00-db1b-4e08-a2d1-1cd738181db3",
       "name": "Download Enhanced Image",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -182,7 +180,7 @@
       }
     },
     {
-      "id": "e-upload",
+      "id": "9effea7e-f75d-46b1-a98c-33f40efe2f08",
       "name": "Upload to Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -326,5 +324,11 @@
         ]
       ]
     }
-  }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {},
+  "active": true,
+  "id": "comfyui-enh-001"
 }

@@ -149,7 +149,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer CONFIGURE_IN_N8N_CREDENTIALS"
+              "value": "={{ $env.SLACK_BOT_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -386,6 +386,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "active": false,
+  "staticData": null,
+  "active": true,
   "id": "f5rTNCSNGXwKiwvE"
 }

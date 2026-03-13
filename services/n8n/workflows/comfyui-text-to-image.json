@@ -1,10 +1,8 @@
 {
-  "id": "comfyui-t2i-001",
   "name": "ComfyUI Text to Image",
-  "active": false,
   "nodes": [
     {
-      "id": "node-webhook",
+      "id": "98f5137e-1136-46b1-a0dd-96f8fccbd42c",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -21,7 +19,7 @@
       "webhookId": "comfyui-image-wh"
     },
     {
-      "id": "node-ack",
+      "id": "de7ac6b4-ae58-49c6-9449-fef7ae16a931",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -36,7 +34,7 @@
       }
     },
     {
-      "id": "node-ack-slack",
+      "id": "1b1f32a3-afdf-44e0-817f-1dbebe50934b",
       "name": "Ack Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -62,7 +60,7 @@
       }
     },
     {
-      "id": "node-enhance",
+      "id": "7f46b8ca-7855-4906-93e5-47778375a0fa",
       "name": "Enhance Prompt",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -74,12 +72,22 @@
         "method": "POST",
         "url": "http://host.docker.internal:11434/api/chat",
         "sendBody": true,
-        "contentType": "json",
-        "body": "={{ JSON.stringify({ model: 'llama3.1:70b', stream: false, messages: [ { role: 'system', content: 'You are an expert at writing FLUX image generation prompts. Expand the user input into a vivid, detailed prompt (max 120 words). Return ONLY the enhanced prompt, no explanation.' }, { role: 'user', content: $('Webhook').first().json.body.prompt || '' } ] }) }}"
+        "contentType": "raw",
+        "body": "={{ JSON.stringify({ model: 'llama3.1:70b', stream: false, messages: [ { role: 'system', content: 'You are an expert at writing FLUX image generation prompts. Expand the user input into a vivid, detailed prompt (max 120 words). Return ONLY the enhanced prompt, no explanation.' }, { role: 'user', content: $('Webhook').first().json.body.prompt || $('Webhook').first().json.body.text || '' } ] }) }}",
+        "rawContentType": "application/json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
       }
     },
     {
-      "id": "node-build-payload",
+      "id": "61038a58-b2ff-40c7-8936-197370183bba",
       "name": "Build ComfyUI Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -88,11 +96,11 @@
         420
       ],
       "parameters": {
-        "jsCode": "\nconst raw = $('Webhook').first().json.body || {};\nconst enhanced = $input.first().json.message?.content || raw.prompt || 'a beautiful landscape';\nconst channelId = raw.channel_id || 'C0AKW7W9ZPX';\nconst userId    = raw.user_id    || '';\nconst clientId  = 'n8n-img-' + Date.now();\nconst seed = Math.floor(Math.random() * 1_000_000_000);\n\n// FLUX.1-schnell FP8 ComfyUI workflow\nconst workflow = {\n  \"6\":  { \"inputs\": {\"text\": enhanced, \"clip\": [\"11\",0]}, \"class_type\": \"CLIPTextEncode\" },\n  \"8\":  { \"inputs\": {\"samples\": [\"13\",0], \"vae\": [\"10\",0]}, \"class_type\": \"VAEDecode\" },\n  \"9\":  { \"inputs\": {\"filename_prefix\": \"n8n_flux\", \"images\": [\"8\",0]}, \"class_type\": \"SaveImage\" },\n  \"10\": { \"inputs\": {\"vae_name\": \"ae.safetensors\"}, \"class_type\": \"VAELoader\" },\n  \"11\": { \"inputs\": {\"clip_name1\": \"clip_l.safetensors\", \"clip_name2\": \"t5xxl_fp8_e4m3fn.safetensors\", \"type\": \"flux\"}, \"class_type\": \"DualCLIPLoader\" },\n  \"13\": { \"inputs\": {\"noise\":[\"25\",0],\"guider\":[\"22\",0],\"sampler\":[\"16\",0],\"sigmas\":[\"17\",0],\"latent_image\":[\"27\",0]}, \"class_type\": \"SamplerCustomAdvanced\" },\n  \"16\": { \"inputs\": {\"sampler_name\": \"euler\"}, \"class_type\": \"KSamplerSelect\" },\n  \"17\": { \"inputs\": {\"scheduler\": \"simple\", \"steps\": 4, \"denoise\": 1.0, \"model\": [\"30\",0]}, \"class_type\": \"BasicScheduler\" },\n  \"22\": { \"inputs\": {\"model\": [\"30\",0], \"conditioning\": [\"6\",0]}, \"class_type\": \"BasicGuider\" },\n  \"25\": { \"inputs\": {\"noise_seed\": seed}, \"class_type\": \"RandomNoise\" },\n  \"27\": { \"inputs\": {\"width\": 1024, \"height\": 1024, \"batch_size\": 1}, \"class_type\": \"EmptySD3LatentImage\" },\n  \"30\": { \"inputs\": {\"unet_name\": \"flux1-schnell-fp8.safetensors\", \"weight_dtype\": \"fp8_e4m3fn\"}, \"class_type\": \"UNETLoader\" }\n};\n\nreturn [{ json: { workflow, clientId, channelId, userId, prompt: enhanced } }];\n"
+        "jsCode": "\nconst raw = $('Webhook').first().json.body || {};\nconst enhanced = $input.first().json.message?.content || raw.prompt || 'a beautiful landscape';\nconst channelId = raw.channel || raw.channel_id || 'C0AKW7W9ZPX';\nconst userId    = raw.user_id || raw.user || '';\nconst clientId  = 'n8n-img-' + Date.now();\nconst seed = Math.floor(Math.random() * 1_000_000_000);\n\n// FLUX.1-schnell FP8 ComfyUI workflow\nconst workflow = {\n  \"6\":  { \"inputs\": {\"text\": enhanced, \"clip\": [\"11\",0]}, \"class_type\": \"CLIPTextEncode\" },\n  \"8\":  { \"inputs\": {\"samples\": [\"13\",0], \"vae\": [\"10\",0]}, \"class_type\": \"VAEDecode\" },\n  \"9\":  { \"inputs\": {\"filename_prefix\": \"n8n_flux\", \"images\": [\"8\",0]}, \"class_type\": \"SaveImage\" },\n  \"10\": { \"inputs\": {\"vae_name\": \"ae.safetensors\"}, \"class_type\": \"VAELoader\" },\n  \"11\": { \"inputs\": {\"clip_name1\": \"clip_l.safetensors\", \"clip_name2\": \"t5xxl_fp8_e4m3fn.safetensors\", \"type\": \"flux\"}, \"class_type\": \"DualCLIPLoader\" },\n  \"13\": { \"inputs\": {\"noise\":[\"25\",0],\"guider\":[\"22\",0],\"sampler\":[\"16\",0],\"sigmas\":[\"17\",0],\"latent_image\":[\"27\",0]}, \"class_type\": \"SamplerCustomAdvanced\" },\n  \"16\": { \"inputs\": {\"sampler_name\": \"euler\"}, \"class_type\": \"KSamplerSelect\" },\n  \"17\": { \"inputs\": {\"scheduler\": \"simple\", \"steps\": 4, \"denoise\": 1.0, \"model\": [\"30\",0]}, \"class_type\": \"BasicScheduler\" },\n  \"22\": { \"inputs\": {\"model\": [\"30\",0], \"conditioning\": [\"6\",0]}, \"class_type\": \"BasicGuider\" },\n  \"25\": { \"inputs\": {\"noise_seed\": seed}, \"class_type\": \"RandomNoise\" },\n  \"27\": { \"inputs\": {\"width\": 1024, \"height\": 1024, \"batch_size\": 1}, \"class_type\": \"EmptySD3LatentImage\" },\n  \"30\": { \"inputs\": {\"unet_name\": \"flux1-schnell-fp8.safetensors\", \"weight_dtype\": \"fp8_e4m3fn\"}, \"class_type\": \"UNETLoader\" }\n};\n\nreturn [{ json: { workflow, clientId, channelId, userId, prompt: enhanced } }];\n"
       }
     },
     {
-      "id": "node-submit",
+      "id": "d5b0f8c0-b90e-4c05-9eaa-119fe052c0e1",
       "name": "Submit to ComfyUI",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -109,7 +117,7 @@
       }
     },
     {
-      "id": "node-poll",
+      "id": "978edfbd-a94e-4e4e-8dc2-8eb1ccbe89b3",
       "name": "Poll Until Done",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -122,7 +130,7 @@
       }
     },
     {
-      "id": "node-download",
+      "id": "e8ba2924-8d55-4398-ad9b-3397ef759657",
       "name": "Download Image",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -144,7 +152,7 @@
       }
     },
     {
-      "id": "node-upload-slack",
+      "id": "eeced2ab-91d0-42b1-a447-934663199141",
       "name": "Upload to Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -277,5 +285,11 @@
         ]
       ]
     }
-  }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {},
+  "active": true,
+  "id": "comfyui-t2i-001"
 }
