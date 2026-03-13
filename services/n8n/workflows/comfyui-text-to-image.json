@@ -83,6 +83,9 @@
               "value": "application/json"
             }
           ]
+        },
+        "options": {
+          "timeout": 600000
         }
       }
     },
@@ -113,7 +116,10 @@
         "url": "http://host.docker.internal:8188/prompt",
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ JSON.stringify({ prompt: $json.workflow, client_id: $json.clientId }) }}"
+        "body": "={{ JSON.stringify({ prompt: $json.workflow, client_id: $json.clientId }) }}",
+        "options": {
+          "timeout": 600000
+        }
       }
     },
     {

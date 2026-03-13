@@ -1,6 +1,16 @@
 # ai-workers
 
+**Your AI-powered team, running locally.** Get instant help from specialized AI agents for coding, architecture, content, prototyping, and research - all on your own hardware for complete privacy.
+
 Autonomous AI agent environment running on local hardware, orchestrated by n8n, with reporting via Slack. Agents handle task execution, code generation, image generation, content creation, and self-management — all on-premise with no public exposure.
+
+## 🚀 Quick Start
+
+**New to AI Workers?** Start here:
+- 📖 [User Guide](USER-GUIDE.md) - Meet your AI team
+- ⚡ [Quick Start](QUICK-START.md) - Running in 15 minutes  
+- 🔧 [Troubleshooting](TROUBLESHOOTING.md) - Solve common issues
+- ❓ [FAQ](FAQ.md) - Frequently asked questions
 
 ## Hardware Target
 
@@ -49,13 +59,18 @@ See [`docs/architecture.md`](docs/architecture.md) for the full component diagra
 
 ## Agent Personalities
 
-| Name | Domain | Base Model |
-|------|--------|------------|
-| Kevin | Diagrams & Architecture | llama3.1 |
-| Jason | Code & Scalability | llama3.1 |
-| Scaachi | Marketing & Content | llama3.1 |
-| Christian | Rapid Prototyping | llama3.1 |
-| Chidi | Feasibility Analysis | llama3.1 |
+| Name | Role | What They Do | Response Time |
+|------|------|--------------|---------------|
+| **Kevin** | Systems Architect | Designs systems, creates technical plans, architecture diagrams | ~30-60s |
+| **Jason** | Software Engineer | Writes code, fixes bugs, builds automations, creates tools | ~20-40s |
+| **Scaachi** | Marketing Lead | Creates content, writes copy, develops marketing strategies | ~15-30s |
+| **Christian** | Rapid Prototyper | Builds quick prototypes, designs UI, tests ideas fast | ~25-45s |
+| **Chidi** | Feasibility Researcher | Researches technical options, analyzes problems, finds solutions | ~30-50s |
+
+**How to use them:**
+- Slack: `/ai [agent]: your request here`
+- Web: Visit `http://localhost:8080` for chat interface
+- Example: `/ai jason: Write a Python script to backup my database`
 
 ## Service Ports (LAN)
 

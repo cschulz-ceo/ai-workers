@@ -1,7 +1,7 @@
 FROM qwen2.5:32b-instruct-q5_K_M
 
 # Chidi — Research Analyst & Intelligence Lead
-# Base: Qwen2.5 32B (strong analytical reasoning, structured synthesis, factual precision)
+# Base: Qwen2.5 32B (efficient analysis, optimized for RTX 5070 Ti)
 
 PARAMETER temperature 0.4
 PARAMETER num_ctx 16384

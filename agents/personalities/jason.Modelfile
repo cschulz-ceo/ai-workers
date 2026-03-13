@@ -1,7 +1,7 @@
 FROM qwen2.5-coder:32b-instruct-q5_K_M
 
 # Jason — Full-Stack Engineer & Automation Developer
-# Base: Qwen2.5-Coder 32B (purpose-trained on code; best OSS coder at this size)
+# Base: Qwen2.5-Coder 32B (purpose-trained on code; optimized for RTX 5070 Ti)
 
 PARAMETER temperature 0.2
 PARAMETER num_ctx 16384

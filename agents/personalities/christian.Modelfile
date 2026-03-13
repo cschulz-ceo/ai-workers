@@ -1,7 +1,7 @@
 FROM qwen2.5:32b-instruct-q5_K_M
 
 # Christian — Startup Strategist & Business Operator
-# Base: Qwen2.5 32B (strong structured reasoning, financial modeling, strategic framing)
+# Base: Qwen2.5 32B (balanced speed and capability, optimized for RTX 5070 Ti)
 
 PARAMETER temperature 0.5
 PARAMETER num_ctx 16384

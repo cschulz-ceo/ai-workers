@@ -113,6 +113,9 @@
               "value": "application/json"
             }
           ]
+        },
+        "options": {
+          "timeout": 600000
         }
       }
     },
