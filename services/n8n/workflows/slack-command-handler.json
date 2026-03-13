@@ -1,5 +1,7 @@
 {
+  "id": "VqmllB5WdHsKmntj",
   "name": "Slack Command Handler v2",
+  "active": true,
   "nodes": [
     {
       "parameters": {
@@ -20,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body;\nconst command = (body.command || '/ai').toLowerCase();\nconst rawText = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst responseUrl = body.response_url || '';\n\n// \u2500\u2500 Slash command routing \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// /image <prompt>    \u2192 ComfyUI text-to-image \u2192 #studio-canvas\n// /video <prompt>    \u2192 ComfyUI text-to-video \u2192 #studio-reels\n// /enhance <url>     \u2192 ComfyUI image enhance\n// /news [topic]      \u2192 News article search\n// /ai [agent:] text  \u2192 Council member or direct Ollama\n\nif (command === '/image' || rawText.toLowerCase().startsWith('image:')) {\n  const prompt = command === '/image' ? rawText : rawText.replace(/^image:/i,'').trim();\n  return [{ json: {\n    route: 'studio_image',\n    prompt,\n    channelId: 'C0AKW7W9ZPX', // #studio-canvas\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/video' || rawText.toLowerCase().startsWith('video:')) {\n  const prompt = command === '/video' ? rawText : rawText.replace(/^video:/i,'').trim();\n  return [{ json: {\n    route: 'studio_video',\n    prompt,\n    channelId: 'C0AKJ788GJK', // #studio-reels\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/enhance' || rawText.toLowerCase().startsWith('enhance:')) {\n  const imageUrl = command === '/enhance' ? rawText : rawText.replace(/^enhance:/i,'').trim();\n  return [{ json: {\n    route: 'studio_enhance',\n    imageUrl,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/news' || rawText.toLowerCase().startsWith('news:')) {\n  const query = command === '/news'\n    ? (rawText || 'AI agents automation')\n    : rawText.replace(/^news:/i,'').trim();\n  return [{ json: {\n    route: 'news',\n    query,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\n\nif (command === '/pm' || rawText.toLowerCase().startsWith('pm:')) {\n  const message = command === '/pm' ? rawText : rawText.replace(/^pm:/i,'').trim();\n  if (!message) {\n    return [{ json: {\n      route: 'help',\n      channelId, userId, userName, responseUrl\n    }}];\n  }\n  return [{ json: {\n    route: 'pm',\n    text: message,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\n// Default: /ai with optional agent prefix (kevin:, jason:, etc.)\nconst AGENTS = ['kevin','jason','scaachi','christian','chidi'];\nconst MODEL_MAP = {\n  kevin: 'kevin:latest', jason: 'jason:latest', scaachi: 'scaachi:latest',\n  christian: 'christian:latest', chidi: 'chidi:latest'\n};\n\nlet agent = 'kevin';\nlet userText = rawText;\n\nfor (const a of AGENTS) {\n  if (rawText.toLowerCase().startsWith(a + ':')) {\n    agent = a;\n    userText = rawText.slice(a.length + 1).trim();\n    break;\n  }\n}\n\nif (!userText) {\n  return [{ json: {\n    route: 'help',\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\nreturn [{ json: {\n  route: 'ai',\n  agent,\n  model: MODEL_MAP[agent],\n  userText,\n  channelId, userId, userName, responseUrl\n}}];"
+        "jsCode": "const body = $input.first().json.body;\nconst command = (body.command || '/ai').toLowerCase();\nconst rawText = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst responseUrl = body.response_url || '';\n\n// \u2500\u2500 Slash command routing \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// /image <prompt>    \u2192 ComfyUI text-to-image \u2192 #studio-canvas\n// /video <prompt>    \u2192 ComfyUI text-to-video \u2192 #studio-reels\n// /enhance <url>     \u2192 ComfyUI image enhance\n// /news [topic]      \u2192 News article search\n// /3d <description>  \u2192 OpenSCAD 3D model generation\n// /patent <idea>     \u2192 AI patent specification writer\n// /ai [agent:] text  \u2192 Council member or direct Ollama\n\nif (command === '/image' || rawText.toLowerCase().startsWith('image:')) {\n  const prompt = command === '/image' ? rawText : rawText.replace(/^image:/i,'').trim();\n  return [{ json: {\n    route: 'studio_image',\n    prompt,\n    channelId: 'C0AKW7W9ZPX', // #studio-canvas\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/video' || rawText.toLowerCase().startsWith('video:')) {\n  const prompt = command === '/video' ? rawText : rawText.replace(/^video:/i,'').trim();\n  return [{ json: {\n    route: 'studio_video',\n    prompt,\n    channelId: 'C0AKJ788GJK', // #studio-reels\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/enhance' || rawText.toLowerCase().startsWith('enhance:')) {\n  const imageUrl = command === '/enhance' ? rawText : rawText.replace(/^enhance:/i,'').trim();\n  return [{ json: {\n    route: 'studio_enhance',\n    imageUrl,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/news' || rawText.toLowerCase().startsWith('news:')) {\n  const query = command === '/news'\n    ? (rawText || 'AI agents automation')\n    : rawText.replace(/^news:/i,'').trim();\n  return [{ json: {\n    route: 'news',\n    query,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/3d' || rawText.toLowerCase().startsWith('3d:')) {\n  const description = command === '/3d' ? rawText : rawText.replace(/^3d:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'cad_3d',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/patent' || rawText.toLowerCase().startsWith('patent:')) {\n  const description = command === '/patent' ? rawText : rawText.replace(/^patent:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'patent',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/pm' || rawText.toLowerCase().startsWith('pm:')) {\n  const message = command === '/pm' ? rawText : rawText.replace(/^pm:/i,'').trim();\n  if (!message) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'pm',\n    text: message,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\n// Default: /ai with optional agent prefix (kevin:, jason:, etc.)\nconst AGENTS = ['kevin','jason','scaachi','christian','chidi'];\nconst MODEL_MAP = {\n  kevin: 'kevin:latest', jason: 'jason:latest', scaachi: 'scaachi:latest',\n  christian: 'christian:latest', chidi: 'chidi:latest'\n};\n\nlet agent = 'kevin';\nlet userText = rawText;\n\nfor (const a of AGENTS) {\n  if (rawText.toLowerCase().startsWith(a + ':')) {\n    agent = a;\n    userText = rawText.slice(a.length + 1).trim();\n    break;\n  }\n}\n\nif (!userText) {\n  return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n}\n\nreturn [{ json: {\n  route: 'ai',\n  agent,\n  model: MODEL_MAP[agent],\n  userText,\n  channelId, userId, userName, responseUrl\n}}];"
       },
       "id": "42b62529-d7b9-48be-917c-e1a4958bb103",
       "name": "Parse Command",
@@ -130,8 +132,8 @@
     {
       "parameters": {
         "mode": "expression",
-        "output": "={{ $json.route === 'ai' ? 0 : $json.route === 'studio_image' ? 1 : $json.route === 'studio_video' ? 2 : $json.route === 'studio_enhance' ? 3 : $json.route === 'news' ? 4 : $json.route === 'pm' ? 6 : 5 }}",
-        "numberOutputs": 7
+        "output": "={{ $json.route === 'ai' ? 0 : $json.route === 'studio_image' ? 1 : $json.route === 'studio_video' ? 2 : $json.route === 'studio_enhance' ? 3 : $json.route === 'news' ? 4 : $json.route === 'pm' ? 6 : $json.route === 'cad_3d' ? 7 : $json.route === 'patent' ? 8 : 5 }}",
+        "numberOutputs": 9
       },
       "id": "98e37f86-6b8a-4c6d-b7cf-89543ea04149",
       "name": "Route Command",
@@ -376,6 +378,94 @@
           "timeout": 10000
         }
       }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':triangular_ruler: *Generating 3D model* for: _' + $json.description + '_\\nI\\'ll post the results in this channel shortly.' }) }}"
+      },
+      "id": "75bdd472-652d-4472-a42c-50a8923db386",
+      "name": "Ack 3D Command",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        688,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/cad-3d",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ description: $json.description, channelId: $json.channelId, userId: $json.userId, userName: $json.userName }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "7cf618d8-c29b-47f7-8cb6-807471c2e37b",
+      "name": "Call 3D CAD",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':page_with_curl: *Generating patent specification* for: _' + $json.description + '_\\nThis may take 1-2 minutes. Results will appear in this channel.' }) }}"
+      },
+      "id": "a1afb0cf-678c-4910-b5b8-7bdf86771bcf",
+      "name": "Ack Patent Command",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        688,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/patent-spec",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ description: $json.description, channelId: $json.channelId, userId: $json.userId, userName: $json.userName }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "3cd38633-cbe3-4cf4-abbb-152d4743de5c",
+      "name": "Call Patent Spec",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        960
+      ]
     }
   ],
   "connections": {
@@ -484,6 +574,20 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Ack 3D Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ack Patent Command",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -523,6 +627,28 @@
           }
         ]
       ]
+    },
+    "Ack 3D Command": {
+      "main": [
+        [
+          {
+            "node": "Call 3D CAD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ack Patent Command": {
+      "main": [
+        [
+          {
+            "node": "Call Patent Spec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -530,7 +656,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "staticData": null,
-  "active": true,
-  "id": "VqmllB5WdHsKmntj"
+  "createdAt": "2026-03-11 18:13:17.694",
+  "updatedAt": "2026-03-13T19:11:16.000Z",
+  "versionId": "ed2b9938-d693-4426-89bb-195388b38636"
 }

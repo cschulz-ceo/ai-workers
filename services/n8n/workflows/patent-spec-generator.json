@@ -1,0 +1,303 @@
+{
+  "id": "patent-spec-001",
+  "name": "Patent Spec Generator",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "patent-spec",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "pat-webhook-01",
+      "name": "Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "patent-spec-wh-001"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst description = (body.description || '').trim();\nconst channelId = body.channelId || '';\nconst userId = body.userId || '';\nconst userName = body.userName || 'user';\n\nconst systemPrompt = `You are a senior patent attorney and technical writer at a top US IP law firm. Write a complete, professional US utility patent application specification.\n\nREQUIRED SECTIONS (include all, in this order):\n\n1. TITLE OF THE INVENTION\n   - Precise, 3-15 words, no brand names\n\n2. FIELD OF THE INVENTION\n   - One paragraph identifying the technical field\n\n3. BACKGROUND OF THE INVENTION\n   - 2-4 paragraphs: existing solutions, their limitations, why they fail\n\n4. SUMMARY OF THE INVENTION\n   - 2-3 paragraphs: high-level description of the invention and its advantages\n\n5. BRIEF DESCRIPTION OF THE DRAWINGS\n   - List figures that would accompany the patent (FIG. 1, FIG. 2, etc.)\n   - Describe what each figure shows\n\n6. DETAILED DESCRIPTION OF THE PREFERRED EMBODIMENTS\n   - 4-8 paragraphs with full technical detail\n   - Reference figures by number\n   - Describe materials, dimensions, relationships, alternatives\n\n7. CLAIMS\n   - At least 3 independent claims (broad, medium, narrow scope)\n   - At least 7 dependent claims referencing the independent claims\n   - Proper legal claim language: \"A [device/method/system] comprising...\"\n   - Each claim is one sentence (use semicolons)\n\n8. ABSTRACT\n   - One paragraph, max 150 words, summarizing the invention\n\nSTYLE RULES:\n- Use formal patent language (\"the invention\", \"in one embodiment\", \"as used herein\")\n- Claims must be precise and non-obvious\n- Independent claims should be broad enough to capture infringers\n- Do not include drawings (describe them textually)`;\n\nreturn [{ json: { description, channelId, userId, userName, systemPrompt } }];"
+      },
+      "id": "pat-parse-01",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'qwen2.5:32b-instruct-q5_K_M', messages: [{ role: 'system', content: $json.systemPrompt }, { role: 'user', content: 'Write a complete patent specification for the following invention:\\n\\n' + $json.description }], stream: false, options: { temperature: 0.3, num_predict: 8192 } }) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "pat-ollama-01",
+      "name": "Generate Patent Spec",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ollamaResp = JSON.parse($input.first().json.data || '{}');\nconst specText = (ollamaResp.message && ollamaResp.message.content) || ollamaResp.response || 'Error: no response';\nconst prev = $input.first().json;\nconst description = prev.description || '';\nconst channelId = prev.channelId || '';\n\n// Split into sections for Slack blocks\n// Post header + first chunk; overflow to thread\nconst MAX_BLOCK = 2800;\nconst chunks = [];\nlet remaining = specText;\nwhile (remaining.length > 0) {\n  chunks.push(remaining.slice(0, MAX_BLOCK));\n  remaining = remaining.slice(MAX_BLOCK);\n}\n\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':page_with_curl: Patent Specification Draft', emoji: true }\n  },\n  {\n    type: 'section',\n    text: { type: 'mrkdwn', text: `*Invention:* ${description}` }\n  },\n  {\n    type: 'divider'\n  },\n  {\n    type: 'section',\n    text: { type: 'mrkdwn', text: chunks[0] }\n  }\n];\n\nif (chunks.length > 1) {\n  blocks.push({\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: `:page_facing_up: Full spec is ${specText.length} chars. Remaining content follows in thread.` }]\n  });\n}\n\nblocks.push({\n  type: 'context',\n  elements: [{ type: 'mrkdwn', text: ':warning: _This is an AI-generated draft. Have a licensed patent attorney review before filing._' }]\n});\n\nreturn [{ json: {\n  channelId,\n  description,\n  slackPayload: JSON.stringify({ channel: channelId, blocks }),\n  extraChunks: chunks.slice(1),\n  fullText: specText,\n} }];"
+      },
+      "id": "pat-format-01",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.slackPayload }}",
+        "options": {}
+      },
+      "id": "pat-post-01",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// If there are extra chunks, post them as thread replies\nconst resp = JSON.parse($input.first().json.data || '{}');\nconst ts = resp.ts || '';\nconst channelId = $input.first().json.channelId || '';\nconst extraChunks = $input.first().json.extraChunks || [];\nconst fullText = $input.first().json.fullText || '';\n\nconst threadMessages = extraChunks.map(chunk => ({\n  channel: channelId,\n  thread_ts: ts,\n  text: chunk,\n}));\n\nreturn [{ json: {\n  channelId,\n  thread_ts: ts,\n  threadMessages,\n  fullText,\n  hasMore: threadMessages.length > 0,\n} }];"
+      },
+      "id": "pat-thread-01",
+      "name": "Prepare Thread",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.hasMore }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "pat-check-01",
+      "name": "Has More?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ channel: $json.channelId, thread_ts: $json.thread_ts, text: $json.threadMessages[0] ? $json.threadMessages[0].text : '' }) }}",
+        "options": {}
+      },
+      "id": "pat-thread-post-01",
+      "name": "Post Thread Chunk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true }",
+        "options": {}
+      },
+      "id": "pat-respond-01",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Patent Spec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Patent Spec": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Slack": {
+      "main": [
+        [
+          {
+            "node": "Prepare Thread",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Thread": {
+      "main": [
+        [
+          {
+            "node": "Has More?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has More?": {
+      "main": [
+        [
+          {
+            "node": "Post Thread Chunk",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Thread Chunk": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "createdAt": "2026-03-13T19:11:16.000Z",
+  "updatedAt": "2026-03-13T19:11:16.000Z",
+  "versionId": "27e7f12d-3e52-4259-9dc3-3cbe846ef26d"
+}

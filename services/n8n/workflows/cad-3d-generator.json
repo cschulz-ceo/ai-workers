@@ -1,0 +1,253 @@
+{
+  "id": "cad-3d-001",
+  "name": "3D CAD Generator",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cad-3d",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "cad-webhook-01",
+      "name": "Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "cad-3d-wh-001"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst description = (body.description || '').trim();\nconst channelId = body.channelId || '';\nconst userId = body.userId || '';\nconst userName = body.userName || 'user';\n\nconst systemPrompt = `You are an expert OpenSCAD programmer specializing in 3D-printable parametric models.\n\nOutput RULES (strictly follow):\n1. Output ONLY valid OpenSCAD code \u2014 no markdown fences, no explanations, no text before or after\n2. Start with variable declarations (dimensions, tolerances)\n3. Add brief comments explaining each major section\n4. Ensure the model is manifold/watertight for 3D printing\n5. Use union(), difference(), intersection() appropriately\n6. Include a translate() to center the model at origin`;\n\nreturn [{ json: { description, channelId, userId, userName, systemPrompt } }];"
+      },
+      "id": "cad-parse-01",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'qwen2.5-coder:32b-instruct-q5_K_M', messages: [{ role: 'system', content: $json.systemPrompt }, { role: 'user', content: 'Generate OpenSCAD code for: ' + $json.description }], stream: false, options: { temperature: 0.2, num_predict: 4096 } }) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "cad-ollama-01",
+      "name": "Generate OpenSCAD",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ollamaResp = JSON.parse($input.first().json.data || '{}');\nconst raw = (ollamaResp.message && ollamaResp.message.content) || ollamaResp.response || '';\n\n// Strip markdown fences if Ollama wrapped it anyway\nlet code = raw.trim();\nconst fenceMatch = code.match(/```(?:openscad|scad)?\\n([\\s\\S]*?)```/i);\nif (fenceMatch) code = fenceMatch[1].trim();\n\n// Pass through context\nconst prev = $input.first().json;\nreturn [{ json: {\n  code,\n  description: prev.description || '',\n  channelId: prev.channelId || '',\n  userId: prev.userId || '',\n  userName: prev.userName || 'user',\n} }];"
+      },
+      "id": "cad-extract-01",
+      "name": "Extract Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8189/render",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ code: $json.code, description: $json.description }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "cad-render-01",
+      "name": "Render 3D",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const render = $input.first().json;\nconst prev = $input.all()[0].json;\n\nconst code = prev.code || '';\nconst description = prev.description || '';\nconst channelId = prev.channelId || '';\nconst success = render.success || false;\nconst jobId = render.job_id || 'unknown';\nconst stlPath = render.stl_path || null;\nconst pngB64 = render.png_b64 || null;\n\n// Build Slack message blocks\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':triangular_ruler: 3D Model Generated', emoji: true }\n  },\n  {\n    type: 'section',\n    text: { type: 'mrkdwn', text: `*Description:* ${description}` }\n  },\n];\n\nif (stlPath) {\n  blocks.push({\n    type: 'section',\n    text: { type: 'mrkdwn', text: `:white_check_mark: *STL file saved to:*\\n\\`${stlPath}\\`` }\n  });\n}\n\nif (!success) {\n  const stlErr = render.stl_error || '';\n  const pngErr = render.png_error || '';\n  blocks.push({\n    type: 'section',\n    text: { type: 'mrkdwn', text: `:warning: Render had issues: ${stlErr || pngErr || 'check openscad-api logs'}` }\n  });\n}\n\nblocks.push({\n  type: 'section',\n  text: { type: 'mrkdwn', text: '*OpenSCAD Code:*' }\n});\n\n// Slack code blocks max 3000 chars\nconst codeSnippet = code.length > 2800 ? code.slice(0, 2800) + '\\n// ... (truncated)' : code;\nblocks.push({\n  type: 'section',\n  text: { type: 'mrkdwn', text: '```' + codeSnippet + '```' }\n});\n\nblocks.push({\n  type: 'context',\n  elements: [{ type: 'mrkdwn', text: `:file_folder: Job ID: \\`${jobId}\\` | Open in OpenSCAD to modify` }]\n});\n\nreturn [{ json: {\n  channelId,\n  pngB64,\n  slackPayload: JSON.stringify({ channel: channelId, blocks }),\n} }];"
+      },
+      "id": "cad-format-01",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.slackPayload }}",
+        "options": {}
+      },
+      "id": "cad-post-01",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true }",
+        "options": {}
+      },
+      "id": "cad-respond-01",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate OpenSCAD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate OpenSCAD": {
+      "main": [
+        [
+          {
+            "node": "Extract Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Code": {
+      "main": [
+        [
+          {
+            "node": "Render 3D",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render 3D": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Slack": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "createdAt": "2026-03-13T19:11:16.000Z",
+  "updatedAt": "2026-03-13T19:11:16.000Z",
+  "versionId": "404ae0b5-a242-4736-b110-72d76caabce8"
+}
