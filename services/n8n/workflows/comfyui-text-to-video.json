@@ -1,5 +1,7 @@
 {
+  "id": "comfyui-t2v-001",
   "name": "ComfyUI Text to Video",
+  "active": true,
   "nodes": [
     {
       "id": "52ccd298-7dc7-4788-9cc8-95a0af017a86",
@@ -158,54 +160,107 @@
       }
     },
     {
-      "id": "b11b347d-6ab4-4844-83c3-09e0f7273539",
-      "name": "Upload to Slack",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1640,
-        420
-      ],
       "parameters": {
         "method": "POST",
-        "url": "https://slack.com/api/files.upload",
+        "url": "https://slack.com/api/files.getUploadURLExternal",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
             }
           ]
         },
         "sendBody": true,
-        "contentType": "multipart-form-data",
+        "contentType": "form-urlencoded",
         "bodyParameters": {
           "parameters": [
             {
-              "name": "channels",
-              "value": "={{ $('Poll Until Done').first().json.channelId }}"
-            },
-            {
               "name": "filename",
-              "value": "={{ $('Poll Until Done').first().json.filename }}"
+              "value": "={{ $('Poll Until Done').first().json.filename || 'video.mp4' }}"
             },
             {
-              "name": "title",
-              "value": ":film_frames: Generated Video"
-            },
-            {
-              "name": "initial_comment",
-              "value": "=:clapper: *{{ $('Poll Until Done').first().json.prompt.slice(0,120) }}*\n_Generated with AnimateDiff + SDXL_"
-            },
-            {
-              "name": "file",
-              "parameterType": "formBinaryData",
-              "inputDataFieldName": "data"
+              "name": "length",
+              "value": "={{ $binary.data.fileSize || 1000000 }}"
             }
           ]
+        },
+        "options": {}
+      },
+      "id": "0eb56336-5994-4bd9-88b4-ebc8c8c82515",
+      "name": "COM_Get Upload URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ JSON.parse($input.first().json.data).upload_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "video/mp4"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "timeout": 60000
         }
-      }
+      },
+      "id": "db7a952d-5869-42f7-a105-7d5eb19c2522",
+      "name": "COM_Upload Binary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/files.completeUploadExternal",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({  files: [{ id: JSON.parse($('COM_Get Upload URL').first().json.data).file_id }],  channel_id: $('Poll Until Done').first().json.channelId,  initial_comment: ':clapper: *' + ($('Poll Until Done').first().json.prompt || 'Generated video').slice(0,120) + '*\\n_Generated with CogVideoX on RTX 5070 Ti_'}) }}",
+        "options": {}
+      },
+      "id": "351a4d43-4a8d-4924-ac69-cfe585d67148",
+      "name": "COM_Complete Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
     }
   ],
   "connections": {
@@ -284,7 +339,29 @@
       "main": [
         [
           {
-            "node": "Upload to Slack",
+            "node": "COM_Get Upload URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COM_Get Upload URL": {
+      "main": [
+        [
+          {
+            "node": "COM_Upload Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COM_Upload Binary": {
+      "main": [
+        [
+          {
+            "node": "COM_Complete Upload",
             "type": "main",
             "index": 0
           }
@@ -295,7 +372,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "staticData": {},
-  "active": true,
-  "id": "comfyui-t2v-001"
+  "createdAt": 1773266728391,
+  "updatedAt": "2026-03-13T19:21:54.000Z",
+  "versionId": "be7f7e63-eb9e-4bef-8112-b2256d2e8bde"
 }

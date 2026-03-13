@@ -121,33 +121,149 @@
     },
     {
       "parameters": {
+        "jsCode": "const prev = $input.first().json;\nconst pngB64 = prev.pngB64 || null;\n\n// Build binary item from base64 if we have a PNG\nconst result = { json: prev };\nif (pngB64) {\n  result.binary = {\n    data: {\n      data: pngB64,\n      mimeType: 'image/png',\n      fileName: '3d-preview.png',\n      fileSize: Math.ceil(pngB64.length * 0.75),\n    }\n  };\n}\nreturn [result];"
+      },
+      "id": "612f22cb-2f7d-4863-b551-9100f478a81d",
+      "name": "Decode PNG",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "https://slack.com/api/chat.postMessage",
+        "url": "https://slack.com/api/files.getUploadURLExternal",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "filename",
+              "value": "3d-preview.png"
+            },
+            {
+              "name": "length",
+              "value": "={{ $binary.data ? $binary.data.fileSize : 100000 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "94b016ec-4713-4fd0-bb23-84d628b5067f",
+      "name": "Get Upload URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ JSON.parse($input.first().json.data).upload_url }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Content-Type",
-              "value": "application/json"
-            },
+              "value": "image/png"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "87292dfe-579e-4185-907f-04cf9813c359",
+      "name": "Upload PNG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/files.completeUploadExternal",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
               "name": "Authorization",
               "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ $json.slackPayload }}",
+        "body": "={{ JSON.stringify({ files: [{ id: JSON.parse($('Get Upload URL').first().json.data).file_id }], channel_id: $('Format Response').first().json.channelId, initial_comment: ':triangular_ruler: 3D model preview' }) }}",
         "options": {}
       },
-      "id": "cad-post-01",
+      "id": "e8bbcb97-b09e-4748-b238-f98e6a6d1323",
+      "name": "Complete Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ (() => {\n  const prev = $('Format Response').first().json;\n  const fileId = JSON.parse($('Get Upload URL').first().json.data).file_id;\n  const blocks = [\n    { type: 'header', text: { type: 'plain_text', text: ':triangular_ruler: 3D Model Generated', emoji: true } },\n    { type: 'section', text: { type: 'mrkdwn', text: '*Description:* ' + (prev.description || '') } },\n    { type: 'image', image_url: 'https://files.slack.com/files-pri/' + fileId + '/3d-preview.png', alt_text: '3D preview' },\n    { type: 'section', text: { type: 'mrkdwn', text: (prev.stlPath ? ':white_check_mark: *STL saved to:* `' + prev.stlPath + '`' : ':warning: STL render failed \u2014 see code below') } },\n    { type: 'section', text: { type: 'mrkdwn', text: '*OpenSCAD Code:*' } },\n    { type: 'section', text: { type: 'mrkdwn', text: '```' + (prev.code || '').slice(0, 2800) + '```' } },\n    { type: 'context', elements: [{ type: 'mrkdwn', text: ':file_folder: Open .scad file in OpenSCAD to edit | :printer: Open .stl in your slicer to print' }] }\n  ];\n  // Also complete the upload so the file is associated with the channel\n  return JSON.stringify({\n    channel: prev.channelId,\n    blocks,\n    unfurl_links: false\n  });\n})() }}",
+        "options": {}
+      },
+      "id": "fc8de743-e612-42a6-820e-c7e068ed4ca8",
       "name": "Post to Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1540,
+        2200,
         300
       ]
     },
@@ -157,12 +273,12 @@
         "responseBody": "={ \"ok\": true }",
         "options": {}
       },
-      "id": "cad-respond-01",
+      "id": "e95dba42-b602-4136-8d0e-b14dc68c44c0",
       "name": "Respond OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1760,
+        2420,
         300
       ]
     }
@@ -227,6 +343,55 @@
       "main": [
         [
           {
+            "node": "Decode PNG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode PNG": {
+      "main": [
+        [
+          {
+            "node": "Get Upload URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Upload URL": {
+      "main": [
+        [
+          {
+            "node": "Upload PNG",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Complete Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PNG": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Complete Upload": {
+      "main": [
+        [
+          {
             "node": "Post to Slack",
             "type": "main",
             "index": 0
@@ -248,6 +413,6 @@
   },
   "settings": {},
   "createdAt": "2026-03-13T19:11:16.000Z",
-  "updatedAt": "2026-03-13T19:11:16.000Z",
-  "versionId": "404ae0b5-a242-4736-b110-72d76caabce8"
+  "updatedAt": "2026-03-13T19:22:41.000Z",
+  "versionId": "530b9555-7742-48b9-862e-53c481d438cb"
 }

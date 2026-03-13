@@ -1,5 +1,7 @@
 {
+  "id": "comfyui-enh-001",
   "name": "ComfyUI Image Enhance",
+  "active": true,
   "nodes": [
     {
       "id": "5fbd167b-74e7-40b8-a38f-f025772995a2",
@@ -180,54 +182,107 @@
       }
     },
     {
-      "id": "9effea7e-f75d-46b1-a98c-33f40efe2f08",
-      "name": "Upload to Slack",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1880,
-        420
-      ],
       "parameters": {
         "method": "POST",
-        "url": "https://slack.com/api/files.upload",
+        "url": "https://slack.com/api/files.getUploadURLExternal",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
             }
           ]
         },
         "sendBody": true,
-        "contentType": "multipart-form-data",
+        "contentType": "form-urlencoded",
         "bodyParameters": {
           "parameters": [
             {
-              "name": "channels",
-              "value": "={{ $('Poll Until Done').first().json.channelId }}"
-            },
-            {
               "name": "filename",
-              "value": "={{ $('Poll Until Done').first().json.filename }}"
+              "value": "={{ $('Poll Until Done').first().json.filename || 'enhanced.png' }}"
             },
             {
-              "name": "title",
-              "value": ":sparkles: Enhanced Image (4x)"
-            },
-            {
-              "name": "initial_comment",
-              "value": ":arrow_up_small: *4x upscaled* with Real-ESRGAN"
-            },
-            {
-              "name": "file",
-              "parameterType": "formBinaryData",
-              "inputDataFieldName": "data"
+              "name": "length",
+              "value": "={{ $binary.data.fileSize || 1000000 }}"
             }
           ]
+        },
+        "options": {}
+      },
+      "id": "bee6639f-12c7-4fad-b397-8f1b73903ef1",
+      "name": "COM_Get Upload URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ JSON.parse($input.first().json.data).upload_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "image/png"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "timeout": 60000
         }
-      }
+      },
+      "id": "bb1962f8-d726-4fe8-89e6-1e9f053cc531",
+      "name": "COM_Upload Binary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/files.completeUploadExternal",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({  files: [{ id: JSON.parse($('COM_Get Upload URL').first().json.data).file_id }],  channel_id: $('Poll Until Done').first().json.channelId,  initial_comment: ':sparkles: *Enhanced image*\\n_Upscaled + enhanced on RTX 5070 Ti_'}) }}",
+        "options": {}
+      },
+      "id": "6995a0bf-de13-4884-b8b1-8e3368b34d29",
+      "name": "COM_Complete Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
     }
   ],
   "connections": {
@@ -317,7 +372,29 @@
       "main": [
         [
           {
-            "node": "Upload to Slack",
+            "node": "COM_Get Upload URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COM_Get Upload URL": {
+      "main": [
+        [
+          {
+            "node": "COM_Upload Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COM_Upload Binary": {
+      "main": [
+        [
+          {
+            "node": "COM_Complete Upload",
             "type": "main",
             "index": 0
           }
@@ -328,7 +405,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "staticData": {},
-  "active": true,
-  "id": "comfyui-enh-001"
+  "createdAt": 1773266728398,
+  "updatedAt": "2026-03-13T19:21:54.000Z",
+  "versionId": "528ab4d1-0272-4625-ad35-bb94fa464606"
 }
