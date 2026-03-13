@@ -65,7 +65,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const ollamaResp = JSON.parse($input.first().json.data || '{}');\nconst specText = (ollamaResp.message && ollamaResp.message.content) || ollamaResp.response || 'Error: no response';\nconst prev = $input.first().json;\nconst description = prev.description || '';\nconst channelId = prev.channelId || '';\n\n// Split into sections for Slack blocks\n// Post header + first chunk; overflow to thread\nconst MAX_BLOCK = 2800;\nconst chunks = [];\nlet remaining = specText;\nwhile (remaining.length > 0) {\n  chunks.push(remaining.slice(0, MAX_BLOCK));\n  remaining = remaining.slice(MAX_BLOCK);\n}\n\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: ':page_with_curl: Patent Specification Draft', emoji: true }\n  },\n  {\n    type: 'section',\n    text: { type: 'mrkdwn', text: `*Invention:* ${description}` }\n  },\n  {\n    type: 'divider'\n  },\n  {\n    type: 'section',\n    text: { type: 'mrkdwn', text: chunks[0] }\n  }\n];\n\nif (chunks.length > 1) {\n  blocks.push({\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: `:page_facing_up: Full spec is ${specText.length} chars. Remaining content follows in thread.` }]\n  });\n}\n\nblocks.push({\n  type: 'context',\n  elements: [{ type: 'mrkdwn', text: ':warning: _This is an AI-generated draft. Have a licensed patent attorney review before filing._' }]\n});\n\nreturn [{ json: {\n  channelId,\n  description,\n  slackPayload: JSON.stringify({ channel: channelId, blocks }),\n  extraChunks: chunks.slice(1),\n  fullText: specText,\n} }];"
+        "jsCode": "// $input.first().json IS the already-parsed Ollama JSON response\nconst resp = $input.first().json;\nconst specText = resp.message?.content || resp.response || 'Error: no Ollama response';\n\n// Pull channelId from Build Prompt (HTTP Request replaced the json item)\nconst buildData = $('Build Prompt').first().json;\nconst channelId = buildData.channelId || '';\nconst description = buildData.description || '';\n\n// Split into chunks for Slack (max 3000 chars per block)\nconst MAX_BLOCK = 2800;\nconst chunks = [];\nlet remaining = specText;\nwhile (remaining.length > 0) {\n  chunks.push(remaining.slice(0, MAX_BLOCK));\n  remaining = remaining.slice(MAX_BLOCK);\n}\n\nconst blocks = [\n  { type: 'header', text: { type: 'plain_text', text: ':page_with_curl: Patent Specification Draft', emoji: true } },\n  { type: 'section', text: { type: 'mrkdwn', text: '*Invention:* ' + description } },\n  { type: 'divider' },\n  { type: 'section', text: { type: 'mrkdwn', text: chunks[0] || 'No content generated.' } },\n];\n\nif (chunks.length > 1) {\n  blocks.push({\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: ':page_facing_up: Full spec is ' + specText.length + ' chars. Remaining content follows in thread.' }]\n  });\n}\n\nblocks.push({\n  type: 'context',\n  elements: [{ type: 'mrkdwn', text: ':warning: _AI-generated draft. Have a licensed patent attorney review before filing._' }]\n});\n\nreturn [{ json: {\n  channelId,\n  description,\n  slackPayload: JSON.stringify({ channel: channelId, blocks }),\n  extraChunks: chunks.slice(1),\n  fullText: specText,\n} }];"
       },
       "id": "pat-format-01",
       "name": "Format Response",
@@ -297,7 +297,6 @@
     }
   },
   "settings": {},
-  "createdAt": "2026-03-13T19:11:16.000Z",
-  "updatedAt": "2026-03-13T19:11:16.000Z",
-  "versionId": "27e7f12d-3e52-4259-9dc3-3cbe846ef26d"
+  "staticData": null,
+  "updatedAt": "2026-03-13T19:39:25.000Z"
 }

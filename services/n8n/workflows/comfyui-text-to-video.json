@@ -134,7 +134,7 @@
         420
       ],
       "parameters": {
-        "jsCode": "\nconst promptId  = $input.first().json.prompt_id;\nconst buildData = $('Build ComfyUI Payload').first().json;\nconst maxTries  = 90;   // 7.5 min \u2014 video takes longer\n\nfor (let i = 0; i < maxTries; i++) {\n  await new Promise(r => setTimeout(r, 5000));\n  const history = await $helpers.httpRequest({\n    method: 'GET',\n    url: `http://host.docker.internal:8188/history/${promptId}`\n  });\n  const entry = history[promptId];\n  if (entry?.status?.completed) {\n    // VHS_VideoCombine outputs gifs/videos\n    const outputs = entry.outputs || {};\n    for (const nodeOut of Object.values(outputs)) {\n      if (nodeOut.gifs?.length) {\n        const vid = nodeOut.gifs[0];\n        return [{ json: {\n          promptId,\n          filename:  vid.filename,\n          subfolder: vid.subfolder || '',\n          type:      vid.type || 'output',\n          channelId: buildData.channelId,\n          userId:    buildData.userId,\n          prompt:    buildData.prompt\n        }}];\n      }\n    }\n  }\n}\nthrow new Error('ComfyUI video generation timed out');\n"
+        "jsCode": "\nconst promptId  = $input.first().json.prompt_id;\nconst buildData = $('Build ComfyUI Payload').first().json;\nconst maxTries  = 90;   // 7.5 min \u2014 video takes longer\n\nfor (let i = 0; i < maxTries; i++) {\n  await new Promise(r => setTimeout(r, 5000));\n  const history = await $helpers.httpRequest({\n    method: 'GET',\n    url: `http://host.docker.internal:8188/history/${promptId}`\n  });\n  const entry = history[promptId];\n  if (entry?.status?.completed) {\n    // VHS_VideoCombine outputs gifs/videos\n    const outputs = entry.outputs || {};\n    for (const nodeOut of Object.values(outputs)) {\n      if (nodeOut.gifs?.length) {\n        const vid = nodeOut.gifs[0];\n        return [{ json: { uploadComment: ':clapper: *' + (prompt || 'Generated video').slice(0,120) + '*\\n_CogVideoX on RTX 5070 Ti_',\n          promptId,\n          filename:  vid.filename,\n          subfolder: vid.subfolder || '',\n          type:      vid.type || 'output',\n          channelId: buildData.channelId,\n          userId:    buildData.userId,\n          prompt:    buildData.prompt\n        }}];\n      }\n    }\n  }\n}\nthrow new Error('ComfyUI video generation timed out');\n"
       }
     },
     {
@@ -161,41 +161,12 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://slack.com/api/files.getUploadURLExternal",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/x-www-form-urlencoded"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "form-urlencoded",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "filename",
-              "value": "={{ $('Poll Until Done').first().json.filename || 'video.mp4' }}"
-            },
-            {
-              "name": "length",
-              "value": "={{ $binary.data.fileSize || 1000000 }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "const https = require('https');\n\nfunction httpsReq(options, body) {\n  return new Promise((resolve, reject) => {\n    if (Buffer.isBuffer(body)) {\n      options.headers = options.headers || {};\n      options.headers['Content-Length'] = body.length;\n    }\n    const req = https.request(options, (res) => {\n      const chunks = [];\n      res.on('data', c => chunks.push(c));\n      res.on('end', () => {\n        const text = Buffer.concat(chunks).toString();\n        try { resolve(JSON.parse(text)); } catch { resolve({ _raw: text }); }\n      });\n    });\n    req.on('error', reject);\n    if (body) req.write(body);\n    req.end();\n  });\n}\n\nconst token = $env.SLACK_BOT_TOKEN;\nconst item = $input.first();\nconst b64 = item.binary && item.binary.data ? item.binary.data.data : null;\n\nif (!b64) {\n  return [{ json: { ...item.json, fileId: null, uploaded: false } }];\n}\n\nconst buf = Buffer.from(b64, 'base64');\nconst mimeType = (item.binary.data.mimeType) || 'application/octet-stream';\nconst fileName = (item.binary.data.fileName) || 'file.bin';\n\n// Step 1: Get upload URL\nconst body1 = `filename=${encodeURIComponent(fileName)}&length=${buf.length}`;\nconst urlData = await httpsReq({\n  method: 'POST',\n  hostname: 'slack.com',\n  path: '/api/files.getUploadURLExternal',\n  headers: {\n    'Authorization': `Bearer ${token}`,\n    'Content-Type': 'application/x-www-form-urlencoded',\n    'Content-Length': Buffer.byteLength(body1),\n  }\n}, Buffer.from(body1));\n\nif (!urlData.ok) throw new Error(`getUploadURL failed: ${JSON.stringify(urlData)}`);\nconst { upload_url, file_id } = urlData;\n\n// Step 2: PUT binary to upload URL\n// Parse upload_url without URL class (not available in sandbox)\nconst urlMatch = upload_url.match(/^https?:\\/\\/([^\\/]+)(\\/[^?]*)?(\\?.*)?$/);\nconst uploadHostname = urlMatch[1];\nconst uploadPath = (urlMatch[2] || '/') + (urlMatch[3] || '');\n\nawait httpsReq({\n  method: 'PUT',\n  hostname: uploadHostname,\n  path: uploadPath,\n  headers: {\n    'Content-Type': mimeType,\n    'Content-Length': buf.length,\n  }\n}, buf);\n\n// Step 3: Complete upload\nconst channelId = item.json.channelId || '';\nconst comment = item.json.uploadComment || '';\nconst completeBody = JSON.stringify({\n  files: [{ id: file_id }],\n  ...(channelId ? { channel_id: channelId } : {}),\n  ...(comment ? { initial_comment: comment } : {}),\n});\n\nawait httpsReq({\n  method: 'POST',\n  hostname: 'slack.com',\n  path: '/api/files.completeUploadExternal',\n  headers: {\n    'Authorization': `Bearer ${token}`,\n    'Content-Type': 'application/json',\n    'Content-Length': Buffer.byteLength(completeBody),\n  }\n}, Buffer.from(completeBody));\n\nreturn [{ json: { ...item.json, fileId: file_id, uploaded: true } }];\n"
       },
-      "id": "0eb56336-5994-4bd9-88b4-ebc8c8c82515",
-      "name": "COM_Get Upload URL",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "99d53427-7e80-4583-b9e1-a14de4ed07b8",
+      "name": "Upload to Slack",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         0,
         0
@@ -203,60 +174,12 @@
     },
     {
       "parameters": {
-        "method": "PUT",
-        "url": "={{ JSON.parse($input.first().json.data).upload_url }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "video/mp4"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "binaryData",
-        "inputDataFieldName": "data",
-        "options": {
-          "timeout": 60000
-        }
+        "jsCode": "// Restore context from Poll Until Done node (HTTP Request dropped it)\nconst poll = $('Poll Until Done').first().json;\nconst item = $input.first();\nreturn [{\n  json: {\n    channelId: poll.channelId || '',\n    filename: poll.filename || 'file',\n    prompt: poll.prompt || '',\n    uploadComment: poll.uploadComment || '{}'\n  },\n  binary: item.binary\n}];"
       },
-      "id": "db7a952d-5869-42f7-a105-7d5eb19c2522",
-      "name": "COM_Upload Binary",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        0,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://slack.com/api/files.completeUploadExternal",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({  files: [{ id: JSON.parse($('COM_Get Upload URL').first().json.data).file_id }],  channel_id: $('Poll Until Done').first().json.channelId,  initial_comment: ':clapper: *' + ($('Poll Until Done').first().json.prompt || 'Generated video').slice(0,120) + '*\\n_Generated with CogVideoX on RTX 5070 Ti_'}) }}",
-        "options": {}
-      },
-      "id": "351a4d43-4a8d-4924-ac69-cfe585d67148",
-      "name": "COM_Complete Upload",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "bea3200a-de59-4880-91cd-2c189eabddc4",
+      "name": "Restore Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
       "position": [
         0,
         0
@@ -339,29 +262,29 @@
       "main": [
         [
           {
-            "node": "COM_Get Upload URL",
+            "node": "Restore Context",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "COM_Get Upload URL": {
-      "main": [
-        [
-          {
-            "node": "COM_Upload Binary",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "COM_Upload Binary": {
+    "Upload to Slack": {
       "main": [
         [
           {
             "node": "COM_Complete Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Context": {
+      "main": [
+        [
+          {
+            "node": "Upload to Slack",
             "type": "main",
             "index": 0
           }
@@ -372,7 +295,6 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "createdAt": 1773266728391,
-  "updatedAt": "2026-03-13T19:21:54.000Z",
-  "versionId": "be7f7e63-eb9e-4bef-8112-b2256d2e8bde"
+  "staticData": {},
+  "updatedAt": "2026-03-13T20:01:35.000Z"
 }
