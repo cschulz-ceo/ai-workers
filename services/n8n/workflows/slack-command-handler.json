@@ -8,33 +8,33 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "node-webhook",
+      "id": "1cf6d49a-02b1-4c27-a581-74ef9d72adf2",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        200,
-        300
+        1232,
+        -192
       ],
       "webhookId": "slack-command"
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body;\nconst command = body.command || '/ai';\nconst rawText = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst channelName = body.channel_name || '';\nconst responseUrl = body.response_url || '';\n\nconst AGENTS = ['kevin','jason','scaachi','christian','chidi'];\nlet agent = 'kevin';\nlet userText = rawText;\n\nfor (const a of AGENTS) {\n  if (rawText.toLowerCase().startsWith(a + ':')) {\n    agent = a;\n    userText = rawText.slice(a.length + 1).trim();\n    break;\n  } else if (rawText.toLowerCase().startsWith(a + ' ')) {\n    agent = a;\n    userText = rawText.slice(a.length + 1).trim();\n    break;\n  }\n}\n\nif (agent === 'kevin' && userText === rawText) {\n  for (const a of AGENTS) {\n    if (channelName.includes(a)) { agent = a; break; }\n  }\n}\n\nconst MODEL_MAP = {\n  kevin: 'kevin:latest',\n  jason: 'jason:latest',\n  scaachi: 'scaachi:latest',\n  christian: 'christian:latest',\n  chidi: 'chidi:latest'\n};\n\nreturn [{ json: {\n  command, rawText, userText, userId, userName,\n  channelId, channelName, responseUrl,\n  agent,\n  model: MODEL_MAP[agent] || 'kevin:latest'\n}}];"
+        "jsCode": "const body = $input.first().json.body;\nconst command = (body.command || '/ai').toLowerCase();\nconst rawText = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst responseUrl = body.response_url || '';\n\n// \u2500\u2500 Slash command routing \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// /image <prompt>    \u2192 ComfyUI text-to-image \u2192 #studio-canvas\n// /video <prompt>    \u2192 ComfyUI text-to-video \u2192 #studio-reels\n// /enhance <url>     \u2192 ComfyUI image enhance\n// /news [topic]      \u2192 News article search\n// /ai [agent:] text  \u2192 Council member or direct Ollama\n\nif (command === '/image' || rawText.toLowerCase().startsWith('image:')) {\n  const prompt = command === '/image' ? rawText : rawText.replace(/^image:/i,'').trim();\n  return [{ json: {\n    route: 'studio_image',\n    prompt,\n    channelId: 'C0AKW7W9ZPX', // #studio-canvas\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/video' || rawText.toLowerCase().startsWith('video:')) {\n  const prompt = command === '/video' ? rawText : rawText.replace(/^video:/i,'').trim();\n  return [{ json: {\n    route: 'studio_video',\n    prompt,\n    channelId: 'C0AKJ788GJK', // #studio-reels\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/enhance' || rawText.toLowerCase().startsWith('enhance:')) {\n  const imageUrl = command === '/enhance' ? rawText : rawText.replace(/^enhance:/i,'').trim();\n  return [{ json: {\n    route: 'studio_enhance',\n    imageUrl,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/news' || rawText.toLowerCase().startsWith('news:')) {\n  const query = command === '/news'\n    ? (rawText || 'AI agents automation')\n    : rawText.replace(/^news:/i,'').trim();\n  return [{ json: {\n    route: 'news',\n    query,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\n\nif (command === '/pm' || rawText.toLowerCase().startsWith('pm:')) {\n  const message = command === '/pm' ? rawText : rawText.replace(/^pm:/i,'').trim();\n  if (!message) {\n    return [{ json: {\n      route: 'help',\n      channelId, userId, userName, responseUrl\n    }}];\n  }\n  return [{ json: {\n    route: 'pm',\n    text: message,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\n// Default: /ai with optional agent prefix (kevin:, jason:, etc.)\nconst AGENTS = ['kevin','jason','scaachi','christian','chidi'];\nconst MODEL_MAP = {\n  kevin: 'kevin:latest', jason: 'jason:latest', scaachi: 'scaachi:latest',\n  christian: 'christian:latest', chidi: 'chidi:latest'\n};\n\nlet agent = 'kevin';\nlet userText = rawText;\n\nfor (const a of AGENTS) {\n  if (rawText.toLowerCase().startsWith(a + ':')) {\n    agent = a;\n    userText = rawText.slice(a.length + 1).trim();\n    break;\n  }\n}\n\nif (!userText) {\n  return [{ json: {\n    route: 'help',\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\nreturn [{ json: {\n  route: 'ai',\n  agent,\n  model: MODEL_MAP[agent],\n  userText,\n  channelId, userId, userName, responseUrl\n}}];"
       },
-      "id": "node-parse",
+      "id": "42b62529-d7b9-48be-917c-e1a4958bb103",
       "name": "Parse Command",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        420,
-        300
+        1456,
+        -192
       ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':hourglass_flowing_sand: *' + $json.agent + '* is thinking...' }) }}",
+        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':hourglass_flowing_sand: *' + a{{ JSON.stringify({ response_type: 'ephemeral', text: ':hourglass_flowing_sand: *' + ($json.agent || 'AI') + '* is thinking...' }) }}s$json.agent + '* is thinking...' }) }}",
         "options": {
           "responseCode": 200,
           "responseHeaders": {
@@ -47,13 +47,13 @@
           }
         }
       },
-      "id": "node-ack",
+      "id": "b26d9acb-99e7-4e9f-884f-b5e68d97137f",
       "name": "Ack Slack",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        640,
-        300
+        1680,
+        -192
       ]
     },
     {
@@ -77,26 +77,26 @@
           "timeout": 300000
         }
       },
-      "id": "node-ollama",
+      "id": "e7088eed-e6c0-4d6d-b4a1-9dd44e9881ea",
       "name": "Call Ollama",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        860,
-        300
+        1904,
+        -192
       ]
     },
     {
       "parameters": {
-        "jsCode": "\n// Convert common markdown to Slack mrkdwn\nfunction mdToMrkdwn(text) {\n  return text\n    .replace(/^#{1,6}\\s+(.+)$/gm, '*$1*')      // headings \u2192 bold\n    .replace(/\\*\\*(.+?)\\*\\*/gs, '*$1*')          // **bold** \u2192 *bold*\n    .replace(/__(.+?)__/gs, '*$1*')              // __bold__ \u2192 *bold*\n    .replace(/~~(.+?)~~/gs, '~$1~')             // ~~strike~~ \u2192 ~strike~\n    .replace(/\\n{3,}/g, '\\n\\n')                  // collapse excess blank lines\n    .trim();\n}\n\n// Agent emoji mapping\nconst AGENT_EMOJI = {\n  kevin: ':briefcase:',\n  jason: ':scales:',\n  scaachi: ':pencil:',\n  christian: ':compass:',\n  chidi: ':bulb:'\n};\n\nconst ollamaResp = $input.first().json;\nconst parsed = $('Parse Command').first().json;\n\nconst content = ollamaResp.message?.content || 'No response from model.';\nconst MAX = 2800;\nconst formatted = mdToMrkdwn(content);\nconst truncated = formatted.length > MAX\n  ? formatted.slice(0, MAX) + '\\n_[response truncated]_'\n  : formatted;\n\nconst emoji = AGENT_EMOJI[parsed.agent] || ':robot_face:';\nconst blocks = [\n  {\n    type: 'header',\n    text: { type: 'plain_text', text: emoji + ' ' + parsed.agent, emoji: true }\n  },\n  {\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: 'responding to <@' + parsed.userId + '>' }]\n  },\n  { type: 'divider' },\n  { type: 'section', text: { type: 'mrkdwn', text: truncated } },\n  {\n    type: 'context',\n    elements: [{ type: 'mrkdwn', text: '_model: ' + (parsed.model || parsed.agent + ':latest') + '_' }]\n  }\n];\n\nreturn [{ json: {\n  responseUrl: parsed.responseUrl,\n  agent: parsed.agent,\n  userId: parsed.userId,\n  slackPayload: JSON.stringify({\n    response_type: 'in_channel',\n    blocks\n  })\n}}];\n"
+        "jsCode": "const ollamaResp = $input.first().json;\nconst parsed = $('Parse Command').first().json;\n\nconst content = ollamaResp.message?.content || 'No response from model.';\nconst MAX = 2800;\nconst truncated = content.length > MAX\n  ? content.slice(0, MAX) + '\\n_[response truncated]_'\n  : content;\n\nreturn [{ json: {\n  responseUrl: parsed.responseUrl,\n  agent: parsed.agent,\n  userId: parsed.userId,\n  slackPayload: JSON.stringify({\n    response_type: 'in_channel',\n    blocks: [\n      {\n        type: 'context',\n        elements: [{ type: 'mrkdwn', text: ':robot_face: *' + parsed.agent + '* responding to <@' + parsed.userId + '>' }]\n      },\n      {\n        type: 'section',\n        text: { type: 'mrkdwn', text: truncated }\n      }\n    ]\n  })\n}}];"
       },
-      "id": "node-format",
+      "id": "16d8e350-4659-4230-b419-13534b2f96a9",
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1080,
-        300
+        2112,
+        -192
       ]
     },
     {
@@ -118,14 +118,231 @@
         "body": "={{ $json.slackPayload }}",
         "options": {}
       },
-      "id": "node-post",
+      "id": "61bfc0e3-a973-4c67-9856-83dba172945f",
       "name": "Post to Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1300,
-        300
+        2336,
+        -192
       ]
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "output": "={{ $json.route === 'ai' ? 0 : $json.route === 'studio_image' ? 1 : $json.route === 'studio_video' ? 2 : $json.route === 'studio_enhance' ? 3 : $json.route === 'news' ? 4 : $json.route === 'pm' ? 6 : 5 }}",
+        "numberOutputs": 7
+      },
+      "id": "98e37f86-6b8a-4c6d-b7cf-89543ea04149",
+      "name": "Route Command",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        688,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ response_type: 'in_channel', text: ($json.route === 'studio_image' ? ':art: Generating your image in *#studio-canvas*...' : $json.route === 'studio_video' ? ':movie_camera: Generating your video in *#studio-reels*...' : $json.route === 'studio_enhance' ? ':sparkles: Enhancing your image...' : ':newspaper: Fetching top articles...') }) }}",
+        "options": {}
+      },
+      "id": "1f82e1d0-5c5f-43ce-9810-a6f616780a87",
+      "name": "Ack Studio Command",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        688,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/comfyui-image",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "195b4824-3414-49b7-ab2c-d7af46ecabdd",
+      "name": "Call Studio Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/comfyui-video",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "cd273841-4412-4444-8926-0e3b6751c6e2",
+      "name": "Call Studio Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/comfyui-enhance",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "5ff4baee-5cb2-4986-b5cc-52c06e44be6c",
+      "name": "Call Studio Enhance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/news-search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "8487b931-a58a-498a-b13c-27de76b1bf7f",
+      "name": "Call News Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ JSON.stringify({\n  response_type: 'ephemeral',\n  blocks: [\n    { type: 'header', text: { type: 'plain_text', text: '\ud83e\udd16 AI Workers \u2014 Command Reference' } },\n    { type: 'section', text: { type: 'mrkdwn', text: '*Slash Commands:*\\n`/image <prompt>` \u2014 Generate an image in #studio-canvas\\n`/video <prompt>` \u2014 Generate a video in #studio-reels\\n`/enhance <image-url>` \u2014 Upscale an image 4\u00d7\\n`/news [topic]` \u2014 Fetch top 5 news articles\\n`/ai [agent:] <question>` \u2014 Ask a council member (kevin/jason/scaachi/christian/chidi)' } },\n    { type: 'section', text: { type: 'mrkdwn', text: '*Channel triggers:*\\nPost any message in `#studio-canvas` \u2192 auto-generates an image\\nPost any message in `#studio-reels` \u2192 auto-generates a video\\nPost any message in `#the-council` \u2192 council members respond' } }\n  ]\n}) }",
+        "options": {}
+      },
+      "id": "b7d9b9b8-a64f-4911-bace-0afbee6500ac",
+      "name": "Show Help",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        912,
+        544
+      ]
+    },
+    {
+      "id": "5df3963b-ebb8-424b-aa7f-0fb4ecf24f17",
+      "name": "Ack PM Command",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        912,
+        656
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':memo: Got it! Analyzing your request and creating a Linear issue...' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "17c14c3a-3f29-4824-960a-34cd6f1dbb4c",
+      "name": "Call Linear PM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1136,
+        656
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/linear-pm",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ text: $json.text, channel_id: $json.channelId, user_id: $json.userId, user_name: $json.userName }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
     }
   ],
   "connections": {
@@ -144,7 +361,7 @@
       "main": [
         [
           {
-            "node": "Ack Slack",
+            "node": "Route Command",
             "type": "main",
             "index": 0
           }
@@ -183,10 +400,101 @@
           }
         ]
       ]
+    },
+    "Route Command": {
+      "main": [
+        [
+          {
+            "node": "Ack Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ack Studio Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ack Studio Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ack Studio Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ack Studio Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Show Help",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ack PM Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ack Studio Command": {
+      "main": [
+        [
+          {
+            "node": "Call Studio Image",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call Studio Video",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call Studio Enhance",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call News Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ack PM Command": {
+      "main": [
+        [
+          {
+            "node": "Call Linear PM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
-    "executionOrder": "v1"
-  },
-  "active": false
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
 }
