@@ -65,7 +65,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// $input.first().json IS the already-parsed Ollama JSON response\nconst resp = $input.first().json;\nconst specText = (resp.message?.content || resp.response || '').trim();\nif (!specText) throw new Error('Ollama returned empty response');\n\nconst buildData = $('Build Prompt').first().json;\nconst channelId = buildData.channelId || '';\nconst description = buildData.description || '';\n\nreturn [{ json: { specText, channelId, description } }];"
+        "jsCode": "// $input.first().json IS already-parsed Ollama response\nconst resp = $input.first().json;\nconst specText = (resp.message?.content || resp.response || '').trim();\nif (!specText) throw new Error('Ollama returned empty response');\n\nconst buildData = $('Build Prompt').first().json;\nconst channelId = buildData.channelId || '';\nconst description = buildData.description || '';\n\nreturn [{ json: { specText, channelId, description } }];"
       },
       "id": "pat-format-01",
       "name": "Format Response",
@@ -93,14 +93,14 @@
     },
     {
       "parameters": {
-        "jsCode": "const https = require('https');\n\nfunction httpsReq(options, body) {\n  return new Promise((resolve, reject) => {\n    if (Buffer.isBuffer(body)) {\n      options.headers = options.headers || {};\n      options.headers['Content-Length'] = body.length;\n    }\n    const req = https.request(options, (res) => {\n      const chunks = [];\n      res.on('data', c => chunks.push(c));\n      res.on('end', () => {\n        const text = Buffer.concat(chunks).toString();\n        try { resolve(JSON.parse(text)); } catch { resolve({ _raw: text }); }\n      });\n    });\n    req.on('error', reject);\n    if (body) req.write(body);\n    req.end();\n  });\n}\n\nconst token = $env.SLACK_BOT_TOKEN;\nconst item = $input.first().json;\nconst specText = item.specText || '';\nconst channelId = item.channelId || '';\nconst description = item.description || '';\n\n// Convert spec text to binary\nconst buf = Buffer.from(specText, 'utf8');\nconst slug = description.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);\nconst fileName = `patent-spec-${slug}.txt`;\n\n// Step 1: Get upload URL\nconst body1 = `filename=${encodeURIComponent(fileName)}&length=${buf.length}`;\nconst urlData = await httpsReq({\n  method: 'POST', hostname: 'slack.com',\n  path: '/api/files.getUploadURLExternal',\n  headers: {\n    'Authorization': `Bearer ${token}`,\n    'Content-Type': 'application/x-www-form-urlencoded',\n    'Content-Length': Buffer.byteLength(body1),\n  }\n}, Buffer.from(body1));\n\nif (!urlData.ok) throw new Error(`getUploadURL failed: ${JSON.stringify(urlData)}`);\nconst { upload_url, file_id } = urlData;\n\n// Step 2: PUT text content to upload URL\nconst urlMatch = upload_url.match(/^https?:\\/\\/([^\\/]+)(\\/[^?]*)?(\\?.*)?$/);\nawait httpsReq({\n  method: 'PUT', hostname: urlMatch[1],\n  path: (urlMatch[2] || '/') + (urlMatch[3] || ''),\n  headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': buf.length }\n}, buf);\n\n// Step 3: Complete \u2014 share directly to channel with context as initial_comment\n// Count approximate word + page stats\nconst wordCount = specText.split(/\\s+/).filter(Boolean).length;\nconst pageEstimate = Math.ceil(wordCount / 250);\n\nconst comment = [\n  `:page_with_curl: *Patent Application Specification Draft*`,\n  `*Invention:* ${description}`,\n  ``,\n  `_${wordCount.toLocaleString()} words \u00b7 ~${pageEstimate} pages \u00b7 Full text in attached file_`,\n  `_Sections: Title \u00b7 Field \u00b7 Background \u00b7 Summary \u00b7 Drawings \u00b7 Embodiments \u00b7 Claims \u00b7 Abstract_`,\n  ``,\n  `:warning: _AI-generated draft. Have a licensed US patent attorney review before filing._`,\n].join('\\n');\n\nconst completeBody = JSON.stringify({\n  files: [{ id: file_id }],\n  ...(channelId ? { channel_id: channelId } : {}),\n  initial_comment: comment,\n});\n\nconst completeResp = await httpsReq({\n  method: 'POST', hostname: 'slack.com',\n  path: '/api/files.completeUploadExternal',\n  headers: {\n    'Authorization': `Bearer ${token}`,\n    'Content-Type': 'application/json',\n    'Content-Length': Buffer.byteLength(completeBody),\n  }\n}, Buffer.from(completeBody));\n\nif (!completeResp.ok) throw new Error(`completeUpload failed: ${JSON.stringify(completeResp)}`);\n\nreturn [{ json: { fileId: file_id, channelId, description, wordCount, uploaded: true } }];"
+        "jsCode": "const https = require('https');\n\nfunction httpsReq(options, body) {\n  return new Promise((resolve, reject) => {\n    if (Buffer.isBuffer(body)) {\n      options.headers = options.headers || {};\n      options.headers['Content-Length'] = body.length;\n    }\n    const req = https.request(options, (res) => {\n      const chunks = [];\n      res.on('data', c => chunks.push(c));\n      res.on('end', () => {\n        const text = Buffer.concat(chunks).toString();\n        try { resolve(JSON.parse(text)); } catch { resolve({ _raw: text }); }\n      });\n    });\n    req.on('error', reject);\n    if (body) req.write(body);\n    req.end();\n  });\n}\n\nconst token = $env.SLACK_BOT_TOKEN;\nconst { specText, channelId, description } = $input.first().json;\n\n// Split spec into \u22642800-char chunks (Slack section text limit is 3000)\nconst CHUNK = 2800;\nconst chunks = [];\nlet pos = 0;\nwhile (pos < specText.length) {\n  // Try to break at a newline boundary near the chunk limit\n  let end = Math.min(pos + CHUNK, specText.length);\n  if (end < specText.length) {\n    const nl = specText.lastIndexOf('\\n', end);\n    if (nl > pos + CHUNK / 2) end = nl + 1;\n  }\n  chunks.push(specText.slice(pos, end).trim());\n  pos = end;\n}\n\nconst wordCount = specText.split(/\\s+/).filter(Boolean).length;\nconst pageEst = Math.ceil(wordCount / 250);\n\n// Build blocks: header + meta + divider + one section per chunk + footer\nconst blocks = [\n  { type: 'header', text: { type: 'plain_text', text: ':page_with_curl: Patent Application Specification', emoji: true } },\n  { type: 'section', text: { type: 'mrkdwn',\n    text: `*Invention:* ${description}\\n_${wordCount.toLocaleString()} words \u00b7 ~${pageEst} pages \u00b7 ${chunks.length} sections_` } },\n  { type: 'divider' },\n  ...chunks.map(c => ({ type: 'section', text: { type: 'mrkdwn', text: c } })),\n  { type: 'divider' },\n  { type: 'context', elements: [{ type: 'mrkdwn',\n    text: ':warning: _AI-generated draft. Have a licensed US patent attorney review and revise before filing._' }] },\n];\n\nconst msgBody = JSON.stringify({ channel: channelId, blocks, unfurl_links: false });\nconst resp = await httpsReq({\n  method: 'POST', hostname: 'slack.com',\n  path: '/api/chat.postMessage',\n  headers: {\n    'Authorization': `Bearer ${token}`,\n    'Content-Type': 'application/json',\n    'Content-Length': Buffer.byteLength(msgBody),\n  }\n}, Buffer.from(msgBody));\n\nif (!resp.ok) throw new Error(`chat.postMessage failed: ${JSON.stringify(resp)}`);\n\nreturn [{ json: { ok: true, ts: resp.ts, channel: resp.channel, wordCount, chunks: chunks.length } }];"
       },
-      "id": "10573a4a-14cb-4faa-b8b0-7da3066598b1",
-      "name": "Upload Spec File",
+      "id": "29f4fdb7-0ee4-47e2-9e33-762e5675c102",
+      "name": "Post Spec",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1200,
+        1400,
         300
       ]
     }
@@ -143,14 +143,14 @@
       "main": [
         [
           {
-            "node": "Upload Spec File",
+            "node": "Post Spec",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Upload Spec File": {
+    "Post Spec": {
       "main": [
         [
           {
@@ -164,5 +164,5 @@
   },
   "settings": {},
   "staticData": null,
-  "updatedAt": "2026-03-13T20:16:51.000Z"
+  "updatedAt": "2026-03-13T20:29:37.000Z"
 }
