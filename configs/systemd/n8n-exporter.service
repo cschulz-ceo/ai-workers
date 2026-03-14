@@ -1,0 +1,16 @@
+[Unit]
+Description=n8n Workflow Prometheus Exporter
+Documentation=https://github.com/cschulz-ceo/ai-workers
+After=network.target
+
+[Service]
+User=biulatech
+ExecStart=/usr/bin/python3 /home/biulatech/ai-workers-1/scripts/maintenance/n8n-exporter.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=n8n-exporter
+
+[Install]
+WantedBy=multi-user.target
