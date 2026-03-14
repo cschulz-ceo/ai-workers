@@ -1,0 +1,19 @@
+[Unit]
+Description=n8n Queue Stack Services
+Documentation=https://github.com/cschulz-ceo/ai-workers
+After=network.target
+Wants=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/docker-compose -f /home/biulatech/ai-workers-1/configs/queue/docker-compose.yml up -d
+ExecStop=/usr/local/bin/docker-compose -f /home/biulatech/ai-workers-1/configs/queue/docker-compose.yml down
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=n8n-queue-stack
+
+[Install]
+WantedBy=multi-user.target

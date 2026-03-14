@@ -88,7 +88,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ model: 'llama3.1:70b', messages: [{ role: 'user', content: 'You are a news analyst. Review these articles and provide a brief 1-sentence summary of each. Format as JSON array with fields: title, source, date, summary, url. Articles: ' + JSON.stringify($('Process All Topics').first().json.topics[0].articles) }], stream: false }) }}",
         "options": {
-          "timeout": 300000
+          "timeout": 600000
         }
       },
       "id": "node-summarize-immersive",
@@ -115,7 +115,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ model: 'llama3.1:70b', messages: [{ role: 'user', content: 'You are a news analyst. Review these articles and provide a brief 1-sentence summary of each. Format as JSON array with fields: title, source, date, summary, url. Articles: ' + JSON.stringify($('Process All Topics').first().json.topics[1].articles) }], stream: false }) }}",
         "options": {
-          "timeout": 300000
+          "timeout": 600000
         }
       },
       "id": "node-summarize-quantum",
@@ -142,7 +142,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ model: 'llama3.1:70b', messages: [{ role: 'user', content: 'You are a news analyst. Review these articles and provide a brief 1-sentence summary of each. Format as JSON array with fields: title, source, date, summary, url. Articles: ' + JSON.stringify($('Process All Topics').first().json.topics[2].articles) }], stream: false }) }}",
         "options": {
-          "timeout": 300000
+          "timeout": 600000
         }
       },
       "id": "node-summarize-startup",

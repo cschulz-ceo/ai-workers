@@ -156,7 +156,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ model: $('Route Task').first().json.model, messages: [{ role: 'user', content: $('Route Task').first().json.prompt }], stream: false }) }}",
         "options": {
-          "timeout": 300000
+          "timeout": 600000
         }
       }
     },

@@ -76,7 +76,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ model: $json.model, messages: [{ role: 'user', content: $json.userText }], stream: false }) }}",
         "options": {
-          "timeout": 300000
+          "timeout": 600000
         }
       },
       "id": "e7088eed-e6c0-4d6d-b4a1-9dd44e9881ea",
@@ -411,7 +411,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ description: $json.description, channelId: $json.channelId, userId: $json.userId, userName: $json.userName }) }}",
         "options": {
-          "timeout": 300000
+          "timeout": 600000
         }
       },
       "id": "7cf618d8-c29b-47f7-8cb6-807471c2e37b",
@@ -455,7 +455,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ description: $json.description, channelId: $json.channelId, userId: $json.userId, userName: $json.userName }) }}",
         "options": {
-          "timeout": 300000
+          "timeout": 600000
         }
       },
       "id": "3cd38633-cbe3-4cf4-abbb-152d4743de5c",

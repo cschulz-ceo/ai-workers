@@ -22,7 +22,7 @@
       "parameters": {
         "method": "GET",
         "url": "http://host.docker.internal:11434/api/tags",
-        "options": { "timeout": 8000 }
+        "options": { "timeout": 600000 }
       },
       "id": "node-ollama",
       "name": "Check Ollama",
@@ -48,7 +48,7 @@
       "parameters": {
         "method": "GET",
         "url": "http://localhost:3000",
-        "options": { "timeout": 8000 }
+        "options": { "timeout": 600000 }
       },
       "id": "node-webui",
       "name": "Check Open WebUI",

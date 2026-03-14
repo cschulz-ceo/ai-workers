@@ -23,7 +23,7 @@
         "method": "GET",
         "url": "http://host.docker.internal:11434/api/tags",
         "options": {
-          "timeout": 10000
+          "timeout": 600000
         }
       },
       "id": "node-ollama-models",
@@ -37,7 +37,7 @@
         "method": "GET",
         "url": "http://host.docker.internal:11434/api/ps",
         "options": {
-          "timeout": 10000
+          "timeout": 600000
         }
       },
       "id": "node-ollama-ps",

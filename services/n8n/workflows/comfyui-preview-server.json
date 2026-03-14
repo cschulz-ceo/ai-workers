@@ -1,0 +1,89 @@
+{
+  "id": "comfyui-preview-001",
+  "name": "ComfyUI Preview Server",
+  "active": true,
+  "nodes": [
+    {
+      "id": "01ea3b8a-8799-46f3-82ca-feb7245c36fd",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "path": "preview-comfyui",
+        "httpMethod": "GET",
+        "responseMode": "responseNode"
+      },
+      "webhookId": "comfyui-preview-server"
+    },
+    {
+      "id": "f83a9a40-d466-4f56-99a1-f50db5bbfe53",
+      "name": "Fetch from ComfyUI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Proxy ComfyUI image/GIF via HTTP \u2014 serves via ngrok to Slack image blocks\nconst http = require('http');\n\nconst query = $input.first().json.query || {};\nconst filename = (query.filename || '').replace(/[^a-zA-Z0-9_\\-\\.]/g, '');\nconst subfolder = (query.subfolder || '').replace(/[^a-zA-Z0-9_\\-]/g, '');\nconst type = (query.type || 'output').replace(/[^a-zA-Z0-9_]/g, '');\n\nif (!filename) {\n  return [{ json: { error: 'missing filename' } }];\n}\n\nconst path = `/view?filename=${encodeURIComponent(filename)}&subfolder=${encodeURIComponent(subfolder)}&type=${encodeURIComponent(type)}`;\n\nconst result = await new Promise((resolve, reject) => {\n  const req = http.get({ host: 'host.docker.internal', port: 8188, path }, (res) => {\n    const chunks = [];\n    res.on('data', c => chunks.push(c));\n    res.on('end', () => {\n      const buf = Buffer.concat(chunks);\n      const ct = res.headers['content-type'] || 'image/png';\n      const isGif = filename.endsWith('.gif') || ct.includes('gif');\n      resolve({\n        buf,\n        mimeType: isGif ? 'image/gif' : ct.split(';')[0].trim(),\n        filename\n      });\n    });\n  });\n  req.on('error', reject);\n});\n\nif (!result.buf || result.buf.length < 10) {\n  return [{ json: { error: 'image not found', filename, path } }];\n}\n\nreturn [{\n  json: { filename, size: result.buf.length },\n  binary: {\n    data: {\n      data: result.buf.toString('base64'),\n      mimeType: result.mimeType,\n      fileName: result.filename,\n      fileSize: result.buf.length\n    }\n  }\n}];\n",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "56e0c125-9a78-4d50-93c3-d9998eac7e24",
+      "name": "Respond with Image",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "respondWith": "binary",
+        "binaryPropertyName": "data",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "={{ $binary.data.mimeType || 'image/png' }}"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "public, max-age=60"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch from ComfyUI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch from ComfyUI": {
+      "main": [
+        [
+          {
+            "node": "Respond with Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

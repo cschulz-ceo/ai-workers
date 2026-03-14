@@ -94,7 +94,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ code: $json.code, description: $json.description }) }}",
         "options": {
-          "timeout": 180000
+          "timeout": 600000
         }
       },
       "id": "cad-render-01",
