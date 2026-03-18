@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body;\nconst command = (body.command || '/ai').toLowerCase();\nconst rawText = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst responseUrl = body.response_url || '';\n\n// \u2500\u2500 Slash command routing \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// /image <prompt>    \u2192 ComfyUI text-to-image \u2192 #studio-canvas\n// /video <prompt>    \u2192 ComfyUI text-to-video \u2192 #studio-reels\n// /enhance <url>     \u2192 ComfyUI image enhance\n// /news [topic]      \u2192 News article search\n// /3d <description>  \u2192 OpenSCAD 3D model generation\n// /patent <idea>     \u2192 AI patent specification writer\n// /ai [agent:] text  \u2192 Council member or direct Ollama\n\nif (command === '/image' || rawText.toLowerCase().startsWith('image:')) {\n  const prompt = command === '/image' ? rawText : rawText.replace(/^image:/i,'').trim();\n  return [{ json: {\n    route: 'studio_image',\n    prompt,\n    channelId: 'C0AKW7W9ZPX', // #studio-canvas\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/video' || rawText.toLowerCase().startsWith('video:')) {\n  const prompt = command === '/video' ? rawText : rawText.replace(/^video:/i,'').trim();\n  return [{ json: {\n    route: 'studio_video',\n    prompt,\n    channelId: 'C0AKJ788GJK', // #studio-reels\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/enhance' || rawText.toLowerCase().startsWith('enhance:')) {\n  const imageUrl = command === '/enhance' ? rawText : rawText.replace(/^enhance:/i,'').trim();\n  return [{ json: {\n    route: 'studio_enhance',\n    imageUrl,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/news' || rawText.toLowerCase().startsWith('news:')) {\n  const query = command === '/news'\n    ? (rawText || 'AI agents automation')\n    : rawText.replace(/^news:/i,'').trim();\n  return [{ json: {\n    route: 'news',\n    query,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/3d' || rawText.toLowerCase().startsWith('3d:')) {\n  const description = command === '/3d' ? rawText : rawText.replace(/^3d:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'cad_3d',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/patent' || rawText.toLowerCase().startsWith('patent:')) {\n  const description = command === '/patent' ? rawText : rawText.replace(/^patent:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'patent',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/pm' || rawText.toLowerCase().startsWith('pm:')) {\n  const message = command === '/pm' ? rawText : rawText.replace(/^pm:/i,'').trim();\n  if (!message) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'pm',\n    text: message,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\n// Default: /ai with optional agent prefix (kevin:, jason:, etc.)\nconst AGENTS = ['kevin','jason','scaachi','christian','chidi'];\nconst MODEL_MAP = {\n  kevin: 'kevin:latest', jason: 'jason:latest', scaachi: 'scaachi:latest',\n  christian: 'christian:latest', chidi: 'chidi:latest'\n};\n\nlet agent = 'kevin';\nlet userText = rawText;\n\nfor (const a of AGENTS) {\n  if (rawText.toLowerCase().startsWith(a + ':')) {\n    agent = a;\n    userText = rawText.slice(a.length + 1).trim();\n    break;\n  }\n}\n\nif (!userText) {\n  return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n}\n\nreturn [{ json: {\n  route: 'ai',\n  agent,\n  model: MODEL_MAP[agent],\n  userText,\n  channelId, userId, userName, responseUrl\n}}];"
+        "jsCode": "const body = $input.first().json.body;\nconst command = (body.command || '/ai').toLowerCase();\nconst rawText = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst responseUrl = body.response_url || '';\n\n// \u2500\u2500 Slash command routing \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// /image <prompt>    \u2192 ComfyUI text-to-image \u2192 #studio-canvas\n// /video <prompt>    \u2192 ComfyUI text-to-video \u2192 #studio-reels\n// /enhance <url>     \u2192 ComfyUI image enhance\n// /news [topic]      \u2192 News article search\n// /3d <description>  \u2192 OpenSCAD 3D model generation\n// /patent <idea>     \u2192 AI patent specification writer\n// /ai [agent:] text  \u2192 Council member or direct Ollama\n// /summarize <url>   \u2192 Summarize a URL\n// /review <code>     \u2192 Jason code review\n\nif (command === '/image' || rawText.toLowerCase().startsWith('image:')) {\n  const prompt = command === '/image' ? rawText : rawText.replace(/^image:/i,'').trim();\n  return [{ json: {\n    route: 'studio_image',\n    prompt,\n    channelId: 'C0AKW7W9ZPX', // #studio-canvas\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/video' || rawText.toLowerCase().startsWith('video:')) {\n  const prompt = command === '/video' ? rawText : rawText.replace(/^video:/i,'').trim();\n  return [{ json: {\n    route: 'studio_video',\n    prompt,\n    channelId: 'C0AKJ788GJK', // #studio-reels\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/enhance' || rawText.toLowerCase().startsWith('enhance:')) {\n  const imageUrl = command === '/enhance' ? rawText : rawText.replace(/^enhance:/i,'').trim();\n  return [{ json: {\n    route: 'studio_enhance',\n    imageUrl,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/news' || rawText.toLowerCase().startsWith('news:')) {\n  const query = command === '/news'\n    ? (rawText || 'AI agents automation')\n    : rawText.replace(/^news:/i,'').trim();\n  return [{ json: {\n    route: 'news',\n    query,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/3d' || rawText.toLowerCase().startsWith('3d:')) {\n  const description = command === '/3d' ? rawText : rawText.replace(/^3d:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'cad_3d',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/patent' || rawText.toLowerCase().startsWith('patent:')) {\n  const description = command === '/patent' ? rawText : rawText.replace(/^patent:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'patent',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\n\nif (command === '/summarize') {\n  const url = rawText.trim();\n  if (!url || !url.startsWith('http')) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'summarize',\n    url,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/review') {\n  const code = rawText.trim();\n  if (!code) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'review',\n    code,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/pm' || rawText.toLowerCase().startsWith('pm:')) {\n  const message = command === '/pm' ? rawText : rawText.replace(/^pm:/i,'').trim();\n  if (!message) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'pm',\n    text: message,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\n// Default: /ai with optional agent prefix (kevin:, jason:, etc.)\nconst AGENTS = ['kevin','jason','scaachi','christian','chidi'];\nconst MODEL_MAP = {\n  kevin: 'kevin:latest', jason: 'jason:latest', scaachi: 'scaachi:latest',\n  christian: 'christian:latest', chidi: 'chidi:latest'\n};\n\nlet agent = 'kevin';\nlet userText = rawText;\n\nfor (const a of AGENTS) {\n  if (rawText.toLowerCase().startsWith(a + ':')) {\n    agent = a;\n    userText = rawText.slice(a.length + 1).trim();\n    break;\n  }\n}\n\nif (!userText) {\n  return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n}\n\nreturn [{ json: {\n  route: 'ai',\n  agent,\n  model: MODEL_MAP[agent],\n  userText,\n  channelId, userId, userName, responseUrl\n}}];"
       },
       "id": "42b62529-d7b9-48be-917c-e1a4958bb103",
       "name": "Parse Command",
@@ -76,7 +76,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ model: $json.model, messages: [{ role: 'user', content: $json.userText }], stream: false }) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 300000
         }
       },
       "id": "e7088eed-e6c0-4d6d-b4a1-9dd44e9881ea",
@@ -132,8 +132,8 @@
     {
       "parameters": {
         "mode": "expression",
-        "output": "={{ $json.route === 'ai' ? 0 : $json.route === 'studio_image' ? 1 : $json.route === 'studio_video' ? 2 : $json.route === 'studio_enhance' ? 3 : $json.route === 'news' ? 4 : $json.route === 'pm' ? 6 : $json.route === 'cad_3d' ? 7 : $json.route === 'patent' ? 8 : 5 }}",
-        "numberOutputs": 9
+        "output": "={{ $json.route === 'ai' ? 0 : $json.route === 'studio_image' ? 1 : $json.route === 'studio_video' ? 2 : $json.route === 'studio_enhance' ? 3 : $json.route === 'news' ? 4 : $json.route === 'pm' ? 6 : $json.route === 'cad_3d' ? 7 : $json.route === 'patent' ? 8 : $json.route === 'summarize' ? 9 : $json.route === 'review' ? 10 : 5 }}",
+        "numberOutputs": 11
       },
       "id": "98e37f86-6b8a-4c6d-b7cf-89543ea04149",
       "name": "Route Command",
@@ -411,7 +411,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ description: $json.description, channelId: $json.channelId, userId: $json.userId, userName: $json.userName }) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 300000
         }
       },
       "id": "7cf618d8-c29b-47f7-8cb6-807471c2e37b",
@@ -455,7 +455,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ description: $json.description, channelId: $json.channelId, userId: $json.userId, userName: $json.userName }) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 300000
         }
       },
       "id": "3cd38633-cbe3-4cf4-abbb-152d4743de5c",
@@ -466,6 +466,216 @@
         912,
         960
       ]
+    },
+    {
+      "id": "59fe7172-5dae-4b99-9fc3-832bddb00e77",
+      "name": "Ack Summarize",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        688,
+        1120
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':mag: Fetching and summarizing that page...' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "3082e18c-e6e5-4df6-be38-ed36b7f34fb4",
+      "name": "Fetch URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        912,
+        1120
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Parse Command').first().json.url }}",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "fullResponse": false
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-ai-workers/1.0 (biulatech.com; AI automation platform)"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,*/*;q=0.9"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b515558a-64ff-4b4c-8c35-df11186c4cb3",
+      "name": "Strip HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        1120
+      ],
+      "parameters": {
+        "jsCode": "const parsed = $('Parse Command').first().json;\nconst html = $input.first().json.data || $input.first().json.body || '';\n// Strip HTML tags, collapse whitespace, truncate\nconst text = html\n  .replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')\n  .replace(/\\s{2,}/g, ' ')\n  .trim()\n  .slice(0, 3500);\n\nreturn [{ json: {\n  pageText: text,\n  url: parsed.url,\n  responseUrl: parsed.responseUrl,\n  userId: parsed.userId\n}}];"
+      }
+    },
+    {
+      "id": "46065a70-e560-433b-a46f-4016d8b86f7a",
+      "name": "Ollama Summarize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1360,
+        1120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  model: \"scaachi:latest\",\n  stream: false,\n  format: \"json\",\n  options: { temperature: 0 },\n  messages: [\n    {\n      role: \"system\",\n      content: \"You are Scaachi, a sharp and curious AI assistant. Summarize the provided web page content concisely. Return JSON: { \\\"summary\\\": \\\"2-3 paragraph summary\\\", \\\"key_points\\\": [\\\"point1\\\", \\\"point2\\\", \\\"point3\\\"] }\"\n    },\n    {\n      role: \"user\",\n      content: \"Summarize this web page content:\\n\\n\" + $json.pageText\n    }\n  ]\n}) }}",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "b765fc8b-2e6a-4616-b4d7-9a6523247933",
+      "name": "Post Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1584,
+        1120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Strip HTML').first().json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ (() => {\n  const resp = $input.first().json;\n  const url = $('Strip HTML').first().json.url;\n  const userId = $('Strip HTML').first().json.userId;\n  let parsed;\n  try { parsed = JSON.parse(resp.message?.content || '{}'); } catch(e) { parsed = {}; }\n  const summary = parsed.summary || resp.message?.content || 'Could not summarize.';\n  const points = (parsed.key_points || []).map(p => '\u2022 ' + p).join('\\n');\n  const MAX = 2500;\n  const text = summary.length > MAX ? summary.slice(0, MAX) + '...' : summary;\n  return JSON.stringify({\n    response_type: 'in_channel',\n    blocks: [\n      { type: 'context', elements: [{ type: 'mrkdwn', text: ':mag: *Scaachi* summarized <' + url + '|this page> for <@' + userId + '>' }] },\n      { type: 'section', text: { type: 'mrkdwn', text: text } },\n      ...(points ? [{ type: 'section', text: { type: 'mrkdwn', text: '*Key Points:*\\n' + points } }] : [])\n    ]\n  });\n})() }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "40e2f2ae-f8d3-48d2-b7ca-194247956a98",
+      "name": "Ack Review",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        688,
+        1280
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':pencil: Jason is reviewing your code...' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "347e1703-1ada-4f96-badd-0f41b70cd9f6",
+      "name": "Ollama Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        912,
+        1280
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  model: \"jason:latest\",\n  stream: false,\n  format: \"json\",\n  options: { temperature: 0 },\n  messages: [\n    {\n      role: \"system\",\n      content: \"You are Jason, a senior software engineer and code reviewer. Review the provided code and return JSON: { \\\"verdict\\\": \\\"LGTM|NEEDS_WORK|CRITICAL\\\", \\\"issues\\\": [{ \\\"severity\\\": \\\"high|medium|low\\\", \\\"line\\\": \\\"description\\\", \\\"fix\\\": \\\"suggestion\\\" }], \\\"strengths\\\": [\\\"what is good\\\"], \\\"summary\\\": \\\"1-2 sentence overall assessment\\\" }\"\n    },\n    {\n      role: \"user\",\n      content: \"Review this code:\\n\\n\" + $('Parse Command').first().json.code\n    }\n  ]\n}) }}",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "61e9afac-e9ae-4dfe-a5b5-4f5eff5f0f8c",
+      "name": "Post Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1136,
+        1280
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Parse Command').first().json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ (() => {\n  const resp = $input.first().json;\n  const userId = $('Parse Command').first().json.userId;\n  let parsed;\n  try { parsed = JSON.parse(resp.message?.content || '{}'); } catch(e) { parsed = {}; }\n  const verdict = parsed.verdict || 'REVIEWED';\n  const summary = parsed.summary || 'Review complete.';\n  const issues = (parsed.issues || []).slice(0, 5).map(i =>\n    `${i.severity === 'high' ? ':red_circle:' : i.severity === 'medium' ? ':large_yellow_circle:' : ':white_circle:'} ${i.line || i.description || 'Issue'} \u2192 ${i.fix || ''}`\n  ).join('\\n');\n  const strengths = (parsed.strengths || []).map(s => '\u2022 ' + s).join('\\n');\n  const verdictEmoji = verdict === 'LGTM' ? ':white_check_mark:' : verdict === 'CRITICAL' ? ':x:' : ':warning:';\n  return JSON.stringify({\n    response_type: 'in_channel',\n    blocks: [\n      { type: 'context', elements: [{ type: 'mrkdwn', text: ':pencil: *Jason* reviewed code for <@' + userId + '> \u2014 ' + verdictEmoji + ' ' + verdict }] },\n      { type: 'section', text: { type: 'mrkdwn', text: summary } },\n      ...(issues ? [{ type: 'section', text: { type: 'mrkdwn', text: '*Issues:*\\n' + issues } }] : []),\n      ...(strengths ? [{ type: 'section', text: { type: 'mrkdwn', text: '*Strengths:*\\n' + strengths } }] : [])\n    ]\n  });\n})() }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a0182f9f-a3f5-4110-b042-12c60ce105a9",
+      "name": "Route Studio",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        900,
+        240
+      ],
+      "parameters": {
+        "mode": "expression",
+        "output": "={{ $json.route === 'studio_image' ? 0 : $json.route === 'studio_video' ? 1 : $json.route === 'studio_enhance' ? 2 : 3 }}",
+        "numberOutputs": 4
+      }
     }
   ],
   "connections": {
@@ -588,6 +798,20 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Ack Summarize",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ack Review",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -595,22 +819,7 @@
       "main": [
         [
           {
-            "node": "Call Studio Image",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Call Studio Video",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Call Studio Enhance",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Call News Search",
+            "node": "Route Studio",
             "type": "main",
             "index": 0
           }
@@ -649,13 +858,109 @@
           }
         ]
       ]
+    },
+    "Ack Summarize": {
+      "main": [
+        [
+          {
+            "node": "Fetch URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch URL": {
+      "main": [
+        [
+          {
+            "node": "Strip HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Strip HTML": {
+      "main": [
+        [
+          {
+            "node": "Ollama Summarize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Summarize": {
+      "main": [
+        [
+          {
+            "node": "Post Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ack Review": {
+      "main": [
+        [
+          {
+            "node": "Ollama Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Review": {
+      "main": [
+        [
+          {
+            "node": "Post Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Studio": {
+      "main": [
+        [
+          {
+            "node": "Call Studio Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Studio Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Studio Enhance",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call News Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false
-  },
-  "staticData": null,
-  "updatedAt": "2026-03-13T19:11:16.000Z"
+  }
 }
