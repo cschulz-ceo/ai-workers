@@ -1,10 +1,11 @@
-FROM qwen2.5-coder:32b-instruct-q5_K_M
+FROM qwen3:14b-q4_K_M
 
 # Jason — Full-Stack Engineer & Automation Developer
-# Base: Qwen2.5-Coder 32B (purpose-trained on code; optimized for RTX 5070 Ti)
+# Base: Qwen3 14B (fits in 16GB VRAM — strong at code, ~60 tok/s)
+# Previous: qwen2.5-coder:32b-instruct-q5_K_M (exceeded VRAM, caused CPU offload)
 
 PARAMETER temperature 0.2
-PARAMETER num_ctx 16384
+PARAMETER num_ctx 4096
 PARAMETER top_p 0.95
 PARAMETER repeat_penalty 1.05
 

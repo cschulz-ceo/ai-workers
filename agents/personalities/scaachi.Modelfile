@@ -1,10 +1,12 @@
-FROM llama3.1:70b-instruct-q5_K_M
+FROM qwen3:14b-q4_K_M
 
 # Scaachi — Marketing Lead & Content Strategist
-# Base: Llama 3.1 70B (superior creative writing, narrative fluency, voice/tone range)
+# Base: Qwen3 14B (fits in 16GB VRAM — good creative range at 60 tok/s)
+# Previous: llama3.1:70b-instruct-q5_K_M (49GB, far exceeded VRAM)
+# Note: If creative quality drops, consider keeping llama3.1:70b for offline batch work
 
 PARAMETER temperature 0.8
-PARAMETER num_ctx 16384
+PARAMETER num_ctx 4096
 PARAMETER top_p 0.95
 PARAMETER repeat_penalty 1.05
 

@@ -1,10 +1,11 @@
-FROM qwen2.5:32b-instruct-q5_K_M
+FROM qwen3:14b-q4_K_M
 
 # Kevin — Systems Architect & Infrastructure Lead
-# Base: Qwen2.5 32B (strong structured reasoning, planning, technical depth)
+# Base: Qwen3 14B (fits in 16GB VRAM — ~60 tok/s vs 2-5 tok/s with 32B)
+# Previous: qwen2.5:32b-instruct-q5_K_M (exceeded VRAM, caused CPU offload)
 
 PARAMETER temperature 0.3
-PARAMETER num_ctx 16384
+PARAMETER num_ctx 4096
 PARAMETER top_p 0.9
 PARAMETER repeat_penalty 1.05
 

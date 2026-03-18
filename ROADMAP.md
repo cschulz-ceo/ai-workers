@@ -1,6 +1,6 @@
 # ai-workers Deployment Roadmap
 
-> Last updated: 2026-03-11
+> Last updated: 2026-03-18
 > Status key: ✅ Done · 🔄 In Progress · 🔲 Pending · ⏳ Future
 
 ---
@@ -88,14 +88,20 @@ POST http://host.docker.internal:11434/api/chat
 
 ---
 
-## Phase 3 — Slash Command Workflows 🔲
+## Phase 3 — Slash Command Workflows ✅ / 🔄
 Dedicated handlers for each slash command beyond `/ai`.
 
 | Command | Workflow | What it does |
 |---------|----------|-------------|
 | `/ai-status` | slack-status-handler | ✅ Checks Ollama, n8n; posts to cmd channel + #ops-status |
-| `/ai-diagnose` | slack-diagnose-handler | ✅ 5 health checks; posts full report (needs n8n restart to activate webhook) |
-| `/ai-draw` | slack-draw-handler | 🔲 Routes to ComfyUI (Phase 5); placeholder now |
+| `/ai-diagnose` | slack-diagnose-handler | ✅ 5 health checks; posts full report |
+| `/news [topic]` | news-article-generator | ✅ RSS fetch → Ollama summary → Slack |
+| `/pm [task]` | linear-ai-project-manager | ✅ Ollama classify → Linear issue → Slack confirm |
+| `/3d [desc]` | 3d-cad-generator | ✅ OpenSCAD → STL + preview image |
+| `/patent [desc]` | patent-spec-generator | ✅ Ollama → patent spec document |
+| `/image [prompt]` | comfyui-text-to-image | 🔄 ComfyUI models downloading |
+| `/video [prompt]` | comfyui-text-to-video | 🔄 ComfyUI models downloading |
+| `/enhance [url]` | comfyui-image-enhance | 🔄 ComfyUI models downloading |
 
 ### `/ai-status` implementation plan
 1. Webhook → ack immediately
@@ -106,16 +112,18 @@ Dedicated handlers for each slash command beyond `/ai`.
 
 ---
 
-## Phase 4 — Ops Automation 🔲
+## Phase 4 — Ops Automation ✅ / 🔄
 Proactive monitoring, alerts, and digests without human triggering.
 
 | Item | Status | Notes |
 |------|--------|-------|
 | Hourly status post → #ops-status | 🔲 | n8n Schedule trigger (future) |
-| Daily digest → #ops-digest | ✅ | Weekdays 9am ET — system health + Kevin quote (needs n8n restart) |
-| GPU overload alert → #ops-alerts | 🔲 | Threshold: >90% util for 5min |
-| Service-down alert → #ops-alerts | 🔲 | Ollama/n8n/Open WebUI down |
-| Commit notifications → #ops-updates | 🔲 | GitHub webhook → n8n → Slack |
+| Daily digest → #ops-digest | ✅ | Weekdays 9am ET — system health + Kevin quote |
+| GPU overload alert → #ops-alerts | ✅ | ops-gpu-alert workflow active |
+| Service-down alert → #ops-alerts | ✅ | ops-service-monitor workflow active |
+| Commit notifications → #ops-updates | ✅ | github-push-handler workflow active |
+| Grafana + Prometheus monitoring | ✅ | Dashboards, blackbox probes, GPU exporter |
+| Weekly news digest | ✅ | Every Monday 8am → 3 RSS feeds → Ollama → Slack |
 
 ### GitHub webhook for #ops-updates
 1. GitHub repo → Settings → Webhooks → Add webhook
@@ -126,7 +134,7 @@ Proactive monitoring, alerts, and digests without human triggering.
 
 ---
 
-## Phase 5 — Task Management Integration 🔲
+## Phase 5 — Task Management Integration ✅ / 🔄
 `#tasks-*` channels become structured agent task queues.
 
 | Item | Status | Notes |
@@ -169,8 +177,7 @@ Move from ngrok free tier to proper domain.
 | n8n behind reverse proxy (caddy/nginx) | ⏳ | TLS termination |
 | n8n auth enabled | ⏳ | N8N_BASIC_AUTH_ACTIVE=true |
 | Automated backups (n8n_data, .env) | ⏳ | Cron → rclone → cloud |
-| Monitoring: Uptime Kuma | ⏳ | Service health dashboard |
-| Monitoring: Netdata | ⏳ | GPU/CPU/RAM metrics |
+| Monitoring: Grafana + Prometheus | ✅ | Service health, GPU, CPU, RAM — already deployed |
 
 ---
 
@@ -206,3 +213,6 @@ Move from ngrok free tier to proper domain.
 |------|-----------|
 | 2026-03-11 | Infrastructure, ngrok, personalities, Slack channels, slash commands, /ai → Ollama working, /ai-status working, dual-channel ops posting |
 | 2026-03-11 | Fixed events receiver IF node bug (Code+Switch routing), @ai-workers mentions now route to correct personality and reply in thread, /ai-diagnose workflow built, ops-daily-digest workflow built |
+| 2026-03-12 | Council deliberation engine (sequential, thread-aware), Grafana dashboard, Weekly News Digest, Linear AI PM, /pm command, systemd overrides (Ollama, ngrok, GPU exporter) |
+| 2026-03-13 | /3d and /patent commands, 3D CAD Generator, Patent Spec Generator, timeout fixes, Prometheus n8n exporter |
+| 2026-03-18 | Model swap: all agents → Qwen3 14B (66 tok/s vs 2-5). n8n restored from wrong compose. Git cleanup (removed binaries). Created DISASTER-RECOVERY.md, MODEL-GUIDE.md. Updated all docs. |

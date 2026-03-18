@@ -77,12 +77,12 @@ The ai-workers environment is an autonomous AI agent platform running entirely o
 ║                       MONITORING LAYER                                   ║
 ║                                                                          ║
 ║  ┌─────────────────┐  ┌──────────────────┐  ┌─────────────────────┐    ║
-║  │   Portainer     │  │    Netdata       │  │    Uptime Kuma      │    ║
-║  │   :9000         │  │    :19999        │  │    :3001            │    ║
+║  │   Grafana       │  │   Prometheus     │  │  Blackbox Exporter  │    ║
+║  │   :3001         │  │    :9090         │  │    :9115            │    ║
 ║  │                 │  │                  │  │                     │    ║
-║  │ Container GUI   │  │ System metrics:  │  │ Service pings:      │    ║
-║  │ Logs/health     │  │ CPU/RAM/Disk/GPU │  │ All service URLs    │    ║
-║  │ Docker socket   │  │ NVIDIA plugin    │  │ Status dashboard    │    ║
+║  │ Dashboards +    │  │ Metrics store:   │  │ HTTP probes:        │    ║
+║  │ Alerting        │  │ CPU/RAM/Disk/GPU │  │ All service URLs    │    ║
+║  │ AI Workers Hub  │  │ 30-day retention │  │ n8n/Ollama/ComfyUI  │    ║
 ║  └────────┬────────┘  └────────┬─────────┘  └──────────┬──────────┘    ║
 ║           └───────────────────┬┘                        │               ║
 ║                               └─────────────────────────┘               ║
@@ -143,9 +143,9 @@ n8n (receives output, chains next workflow steps)
 ```
 Service/System Event
     │
-    ├── Portainer detects container crash
-    ├── Netdata threshold exceeded (CPU/GPU/RAM)
-    └── Uptime Kuma detects service down
+    ├── Blackbox exporter detects service down (HTTP probe)
+    ├── Prometheus threshold exceeded (CPU/GPU/RAM via node-exporter + gpu-exporter)
+    └── Grafana alert rule fires
     │
     ▼
 n8n webhook trigger
@@ -208,20 +208,20 @@ Linear issue marked complete
 - **Deployment**: Cloud SaaS — no self-hosting required
 - **Integration**: n8n writes issues via Linear GraphQL API (`linear-ai-project-manager` workflow)
 
-### Portainer — Container Management
-- **Port**: 9000
-- **Access**: Docker socket mount
-- **Alerts**: Webhook to n8n on container state changes
-
-### Netdata — System Metrics
-- **Port**: 19999
-- **Plugins**: NVIDIA GPU (via `nvidia-smi`), disk I/O, network
-- **Alerts**: Configured to POST to n8n webhook endpoint
-
-### Uptime Kuma — Uptime Monitoring
+### Grafana — Dashboards & Alerting
 - **Port**: 3001
-- **Monitors**: All service URLs + LAN health checks
-- **Notifications**: n8n webhook on status change
+- **Dashboard**: `ai-workers-hub` — service uptime, CPU, RAM, disk, GPU metrics
+- **Data sources**: Prometheus, JSON API
+- **Anonymous access**: Enabled (Viewer role)
+
+### Prometheus — Metrics Collection
+- **Port**: 9090
+- **Retention**: 30 days
+- **Scrape jobs**: node-exporter, blackbox-http, gpu-exporter (:9835), n8n-exporter (:9201)
+
+### Blackbox Exporter — Service Probes
+- **Port**: 9115
+- **Probes**: HTTP health checks for n8n, Ollama, Open WebUI, ComfyUI, ngrok, Grafana
 
 ---
 
@@ -235,5 +235,5 @@ Linear issue marked complete
 6. Git + GitHub (version control — configure after n8n is live)
 7. WireGuard (network access — independent, can be done anytime)
 8. Linear (project management — cloud API, requires LINEAR_API_KEY in .env)
-9. Monitoring stack (Portainer, Netdata, Uptime Kuma — depends on services being live)
+9. Monitoring stack (Grafana, Prometheus, Blackbox Exporter — depends on services being live)
 10. MCP servers + Skills (autonomy layer — built on top of everything else)

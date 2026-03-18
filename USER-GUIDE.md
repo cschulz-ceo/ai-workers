@@ -113,10 +113,11 @@ Visit `http://localhost:8080` for a chat interface with all agents.
 
 ## What to Expect
 
-### Response Times
-- **Simple questions**: 15-30 seconds
-- **Complex tasks**: 30-60 seconds
-- **Large code/projects**: 1-2 minutes
+### Response Times (Qwen3 14B @ ~66 tok/s)
+- **Simple questions**: 3-10 seconds
+- **Complex tasks**: 10-30 seconds
+- **Large code/projects**: 30-90 seconds
+- **Council deliberation (4 agents)**: 4-8 minutes
 
 ### What Agents Can Do
 ✅ **Great at:**
@@ -190,6 +191,17 @@ A: Check the [Troubleshooting Guide](TROUBLESHOOTING.md) or use `/ai-diagnose` i
 - `/ai-status` - Check if all agents are working
 - `/ai-diagnose` - Run system health check
 - `/ai [agent]: help` - Get help from a specific agent
+
+### Content Generation Commands
+- `/news [topic]` - Generate a news article summary
+- `/3d [description]` - Generate a 3D CAD model (OpenSCAD STL + preview)
+- `/patent [description]` - Generate a patent specification document
+- `/image [prompt]` - Generate an image (requires ComfyUI models)
+- `/video [prompt]` - Generate a video (requires ComfyUI models)
+- `/enhance [url]` - Enhance/upscale an image (requires ComfyUI models)
+
+### Project Management Commands
+- `/pm [task description]` - Create a Linear issue (AI classifies priority and type)
 
 ### When to Contact Support
 If you've tried the troubleshooting steps and still have issues, reach out through your normal support channels.

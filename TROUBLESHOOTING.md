@@ -433,6 +433,51 @@ ollama rm unused-model-name
 
 ---
 
+## Workflows Disappeared / n8n Shows Setup Screen
+
+### Symptoms
+- Navigating to localhost:5678 shows "Set up owner account" instead of login
+- Or: login works but workflows are missing from the list
+
+### Most Likely Cause
+n8n was started from the wrong Docker Compose file, pointing to an empty database.
+
+### Fix
+Run the restart script to start from the correct compose with the real database:
+```bash
+bash /home/biulatech/n8n/restart-n8n.sh
+```
+
+### If That Doesn't Work
+Check the database directly:
+```bash
+sqlite3 /home/biulatech/n8n/n8n_data/database.sqlite "SELECT count(*) FROM workflow_entity;"
+```
+If it returns 0, restore from backup — see [DISASTER-RECOVERY.md](DISASTER-RECOVERY.md).
+
+---
+
+## Models Are Slow (5+ Minute Responses)
+
+### Symptoms
+- Slack commands take 5-10 minutes to respond
+- n8n workflows time out on Ollama calls
+- `nvidia-smi` shows low GPU utilization but high CPU usage
+
+### Cause
+The model is too large for the 16 GB VRAM and is being offloaded to CPU/RAM.
+
+### Fix
+Check what model is running and its size:
+```bash
+ollama ps    # Shows loaded models and VRAM usage
+ollama list  # Shows all models and their disk size
+```
+
+Models over ~10 GB on disk will exceed VRAM. Switch to Qwen3 14B (9.3 GB) — see [MODEL-GUIDE.md](MODEL-GUIDE.md) for details.
+
+---
+
 ## Prevention Tips
 
 ### Regular Maintenance

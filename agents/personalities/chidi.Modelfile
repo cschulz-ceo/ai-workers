@@ -1,10 +1,11 @@
-FROM qwen2.5:32b-instruct-q5_K_M
+FROM qwen3:14b-q4_K_M
 
 # Chidi — Research Analyst & Intelligence Lead
-# Base: Qwen2.5 32B (efficient analysis, optimized for RTX 5070 Ti)
+# Base: Qwen3 14B (fits in 16GB VRAM — efficient analysis at ~60 tok/s)
+# Previous: qwen2.5:32b-instruct-q5_K_M (exceeded VRAM, caused CPU offload)
 
 PARAMETER temperature 0.4
-PARAMETER num_ctx 16384
+PARAMETER num_ctx 4096
 PARAMETER top_p 0.9
 PARAMETER repeat_penalty 1.05
 
