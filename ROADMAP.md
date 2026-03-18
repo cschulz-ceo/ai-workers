@@ -31,18 +31,15 @@ Full Slack ↔ n8n communication layer.
 | Slack app created (manifest) | ✅ | ai-workers app |
 | 21 channels created | ✅ | counsel/tasks/gen/ops groups |
 | Bot + user invited to all channels | ✅ | |
-| Slash commands registered | ✅ | /ai, /ai-status, /ai-draw, /ai-diagnose |
+| Slash commands registered | ✅ | All 11: /ai, /ai-status, /ai-draw, /ai-diagnose, /image, /video, /enhance, /news, /pm, /3d, /patent |
 | n8n events receiver workflow | ✅ | Code+Switch routing, app_mention → Ollama → thread reply |
 | n8n command handler workflow (ack) | ✅ | /webhook/slack-command, 3s ack working |
-| Enable Slack Event Subscriptions | ✅ | app_mention routing live |
+| Slack Event Subscriptions | ✅ | **Verified** — `appendicular-wilson-looser.ngrok-free.dev/webhook/slack-events` |
 | Slack credentials in n8n | ✅ | Header Auth credential configured |
 
-### Manual step: Enable Event Subscriptions
-1. Slack app → Features → Event Subscriptions → toggle On
-2. URL: `https://appendicular-wilson-looser.ngrok-free.dev/webhook/slack-events`
-3. Verify passes green (events receiver is live)
-4. Confirm bot events: `message.channels`, `app_mention`
-5. Save Changes
+### ✅ Manual steps complete (as of 2026-03-18)
+- Event Subscriptions: On, URL verified, bot events `message.channels` + `app_mention` saved
+- All 11 slash commands confirmed in Slack app → Slash Commands
 
 ### Manual step: Add Slack credentials in n8n
 1. n8n → Credentials → Add Credential → search "Header Auth"
@@ -181,24 +178,22 @@ Move from ngrok free tier to proper domain.
 
 ---
 
-## What You Can Configure Right Now (No Code Needed)
+## Configuration Status
 
 ### In Slack (api.slack.com/apps → ai-workers):
-- [ ] Enable Event Subscriptions (see Phase 1 above)
-- [ ] Verify `message.channels` + `app_mention` bot events are saved
+- [x] ✅ Event Subscriptions: On, URL verified, `message.channels` + `app_mention` bot events saved
+- [x] ✅ All 11 slash commands registered: /ai, /ai-status, /ai-draw, /ai-diagnose, /image, /video, /enhance, /news, /pm, /3d, /patent
 
 ### In n8n (localhost:5678):
-- [ ] Add Slack Bot Token as Header Auth credential
-- [ ] Add Slack Signing Secret as credential
-- [ ] Open Slack Command Handler → confirm webhook path is `slack-command`
-- [ ] Open Slack Events Receiver → confirm active + path is `slack-events`
+- [x] ✅ Slack Bot Token Header Auth credential configured
+- [x] ✅ Slack Signing Secret credential configured
+- [x] ✅ Slack Command Handler active at `/webhook/slack-command`
+- [x] ✅ Slack Events Receiver active at `/webhook/slack-events`
 
 ### In Open WebUI (localhost:8080):
-- [ ] Create an account (first signup = admin)
-- [ ] Confirm all 5 personalities appear in the model picker
-- [ ] Set a default model (kevin or chidi recommended for general use)
-- [ ] Admin → Settings → enable "Chat History" if not already on
-- [ ] Admin → Settings → set document embedding model to `nomic-embed-text`
+- [x] ✅ All 5 personalities at 14.8B (Qwen3 14B) confirmed in model picker (2026-03-18)
+- [x] ✅ nomic-embed-text available for embeddings
+- [ ] Set a default model (kevin or chidi recommended)
 
 ### In Wix (manage.wix.com) — optional, future prep:
 - [ ] Go to Manage Domain → DNS Records
@@ -215,4 +210,4 @@ Move from ngrok free tier to proper domain.
 | 2026-03-11 | Fixed events receiver IF node bug (Code+Switch routing), @ai-workers mentions now route to correct personality and reply in thread, /ai-diagnose workflow built, ops-daily-digest workflow built |
 | 2026-03-12 | Council deliberation engine (sequential, thread-aware), Grafana dashboard, Weekly News Digest, Linear AI PM, /pm command, systemd overrides (Ollama, ngrok, GPU exporter) |
 | 2026-03-13 | /3d and /patent commands, 3D CAD Generator, Patent Spec Generator, timeout fixes, Prometheus n8n exporter |
-| 2026-03-18 | Model swap: all agents → Qwen3 14B (66 tok/s vs 2-5). n8n restored from wrong compose. Git cleanup (removed binaries). Created DISASTER-RECOVERY.md, MODEL-GUIDE.md. Updated all docs. |
+| 2026-03-18 | Model swap: all 5 agents → Qwen3 14B Q4_K_M (9.3 GB, ~66 tok/s vs 2-5 tok/s). n8n restored from wrong compose; restart-n8n.sh created. Git cleanup (removed SQLite/STL binaries, redundant docs). Created DISASTER-RECOVERY.md + MODEL-GUIDE.md. Updated TROUBLESHOOTING.md, USER-GUIDE.md, architecture.md, ROADMAP.md, SESSION_CONTEXT.md. Confirmed: all 11 Slack commands registered, Event Subscriptions verified, Open WebUI showing all 5 agents at 14.8B. ComfyUI model download initiated. |

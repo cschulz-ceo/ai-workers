@@ -38,17 +38,21 @@
 
 ## Ollama Models
 
+**All 5 agents updated 2026-03-18: qwen3:14b-q4_K_M base (9.3 GB, ~11 GB VRAM, ~66 tok/s)**
+
 | Model | Size | Used By |
 |-------|------|---------|
-| kevin:latest | 21 GB | /ai default, Council, Ops Digest, Diagnose |
-| jason:latest | 21 GB | Council, /ai jason: prefix |
-| scaachi:latest | 46 GB | Council, /ai scaachi: prefix |
-| christian:latest | 21 GB | Council, /ai christian: prefix |
-| chidi:latest | 21 GB | Council, /ai chidi: prefix |
-| llama3.1:70b-instruct-q5_K_M | 46 GB | ⚠️ Linear PM uses `llama3.1:70b` (name mismatch — needs alias or fix) |
-| qwen2.5:32b-instruct-q5_K_M | 21 GB | Available, not wired |
-| qwen2.5-coder:32b-instruct-q5_K_M | 21 GB | Available, not wired |
-| nomic-embed-text:latest | ~300 MB | Open WebUI embeddings |
+| kevin:latest | 9.3 GB | /ai default, Council, Ops Digest, Diagnose |
+| jason:latest | 9.3 GB | Council, /ai jason: prefix |
+| scaachi:latest | 9.3 GB | Council, /ai scaachi: prefix |
+| christian:latest | 9.3 GB | Council, /ai christian: prefix |
+| chidi:latest | 9.3 GB | Council, /ai chidi: prefix |
+| qwen3:14b-q4_K_M | 9.3 GB | Base model (all 5 agents built from this) |
+| llama3.1:70b | 49 GB | Available for offline batch work (Open WebUI only — too slow for Slack) |
+| llama3.1:70b-instruct-q5_K_M | 49 GB | Same digest as above; llama3.1:70b alias confirmed working |
+| qwen2.5:32b-instruct-q5_K_M | 23 GB | Available, not active (exceeds VRAM) |
+| qwen2.5-coder:32b-instruct-q5_K_M | 23 GB | Available, not active (exceeds VRAM) |
+| nomic-embed-text:latest | 274 MB | Open WebUI embeddings |
 
 ---
 
@@ -81,18 +85,25 @@
 
 ---
 
-## Slash Commands
+## Slack Configuration
 
-| Command | Status | Blocked By |
-|---------|--------|-----------|
-| `/ai [agent:] text` | ✅ Working | — |
-| `/ai-status` | ✅ Working | — |
-| `/ai-diagnose` | ✅ Working | — |
-| `/pm text` | ✅ Working | Tested 2026-03-13 — Ollama classifies, Linear issue created, Slack confirm posted |
-| `/image prompt` | ❌ Broken | ComfyUI no models |
-| `/video prompt` | ❌ Broken | ComfyUI no models |
-| `/enhance url` | ❌ Broken | ComfyUI no models |
-| `/news [topic]` | ✅ Working | Fixed 2026-03-12 (responseMode, Post to Slack URL, auth header) |
+**Event Subscriptions:** ✅ Verified — `https://appendicular-wilson-looser.ngrok-free.dev/webhook/slack-events`
+
+### Slash Commands (11 registered in Slack app)
+
+| Command | Registered in Slack | n8n Workflow Status | Notes |
+|---------|--------------------|--------------------|-------|
+| `/ai [agent:] text` | ✅ | ✅ Working | Routes to Ollama personality by prefix or channel |
+| `/ai-status` | ✅ | ✅ Working | Health check → #ops-status |
+| `/ai-draw` | ✅ | 🔄 In Progress | Registered in Slack; workflow wiring TBC |
+| `/ai-diagnose` | ✅ | ✅ Working | 5-point diagnostic report |
+| `/image prompt` | ✅ | 🔄 Needs ComfyUI models | Download script run 2026-03-18; awaiting completion |
+| `/video prompt` | ✅ | 🔄 Needs ComfyUI models | Same as above |
+| `/enhance url` | ✅ | 🔄 Needs ComfyUI models | Same as above |
+| `/news [topic]` | ✅ | ✅ Working | RSS fetch → Ollama → #ops-intel |
+| `/pm text` | ✅ | ✅ Working | Ollama classify → Linear issue → Slack confirm |
+| `/3d desc` | ✅ | ✅ Working | OpenSCAD → STL + preview image |
+| `/patent desc` | ✅ | ✅ Working | Ollama → patent spec document |
 
 ---
 
@@ -122,28 +133,18 @@
 
 ## Current Blockers
 
-### 1. 🔴 n8n running from wrong compose — WORKFLOWS MISSING IN UI
-**Root cause:** Another AI tool created `services/n8n/docker-compose.yml` which points to a fresh empty SQLite database at `services/n8n/n8n_data/`. The original compose at `/home/biulatech/n8n/docker-compose.yml` points to the real 18.5MB database with all 20 workflows + credentials.
-**Fix:** Run the restart script:
+### 1. 🟡 ComfyUI — model checkpoint download in progress
+Download script run 2026-03-18. FLUX.1-schnell (~20GB) requires HF_TOKEN + license acceptance at huggingface.co/black-forest-labs/FLUX.1-schnell.
+**Check status:**
 ```bash
-bash /home/biulatech/n8n/restart-n8n.sh
+tmux attach -t comfyui-dl   # or check: cat /tmp/comfyui-dl.log
 ```
-This stops all n8n containers and restarts from the original compose. Timeout settings (600s default, 900s max) have been added to handle long Ollama tasks.
+After download completes: verify ComfyUI at localhost:8188, then test /image, /video, /enhance from Slack.
 
-### 2. 🟡 ComfyUI — no model checkpoints
-**Fix:** Run the existing download script (FLUX.1-schnell, ~20GB, use tmux):
-```bash
-tmux new-session -d -s comfyui-dl 'bash /home/biulatech/ai-workers-1/scripts/download-comfyui-models.sh 2>&1 | tee /tmp/comfyui-dl.log'
-```
-After download completes, activate the 3 ComfyUI n8n workflows (t2i, t2v, enhance) in the n8n UI.
+### 2. 🔲 `/ai-draw` — registered in Slack but n8n workflow not fully wired
+The command exists in the Slack app. Needs a dedicated n8n workflow or routing in the Slack Command Handler.
 
-### 2. 🟡 ComfyUI workflows — no model checkpoints
-ComfyUI t2i, t2v, enhance workflows are activated but ComfyUI has no checkpoint models.
-**Fix:** Run the download script (FLUX.1-schnell requires HF_TOKEN + license acceptance):
-```bash
-# Accept license at huggingface.co/black-forest-labs/FLUX.1-schnell first
-HF_TOKEN=<your_token> tmux new-session -d -s comfyui-dl 'bash /home/biulatech/ai-workers-1/scripts/download-comfyui-models.sh 2>&1 | tee /tmp/comfyui-dl.log'
-```
+### ✅ Previously resolved
 
 ### ✅ Previously resolved
 - Ollama binding: `0.0.0.0:11434` — systemd override applied 2026-03-12
@@ -240,4 +241,4 @@ HF_TOKEN=<your_token> tmux new-session -d -s comfyui-dl 'bash /home/biulatech/ai
 | 2026-03-12 | Re-evaluated plan against actual repo state. Fixed jason.Modelfile path (~/ai-workers → ~/ai-workers-1), retired stale top-level workflows/ stubs (3 JSON files), added services/n8n/workflows/README.md. Confirmed llama3.1:70b alias + backup/export crons already present. Wired agent→Linear update loop: updated Slack Events Receiver to route TASK: messages in #tasks-* to Tasks Channel Handler (/webhook/slack-tasks) via new Switch[4] → Ack Task → Forward to Tasks nodes. Tasks Channel Handler already had complete Ollama+Linear+studio flow. |
 | 2026-03-12 | Fixed ComfyUI ae.safetensors download (HF_TOKEN support added to script). Populated workflow_published_version table (n8n v2.11.3 requires this for UI to display workflows). All 16 workflows now visible and active in n8n UI. ComfyUI t2i/t2v/enhance workflows activated — /image /video /enhance live. |
 | 2026-03-13 | (Other AI sessions) Added /3d and /patent Slack commands, 3D CAD Generator workflow, Patent Spec Generator, timeout fixes, Prometheus n8n exporter, various bug fixes. Attempted Redis/Postgres queue migration — broke n8n (empty Postgres DB, all workflows in SQLite). Partially reverted. |
-| 2026-03-18 | **Session 7:** Diagnosed n8n "Set up owner account" issue — wrong compose active (`services/n8n/` with empty SQLite instead of `/home/biulatech/n8n/` with 20 workflows). Created restart script. Added timeout/concurrency env vars to original compose (600s default, 900s max). Git cleanup: removed 18.5MB SQLite from tracking, 12 STL binaries, 5 redundant IMPLEMENTATION-COMPLETE docs, 3 redundant docs, stale services/n8n/docker-compose.yml. Updated .gitignore to block n8n_data/, .sqlite, .stl files. |
+| 2026-03-18 | **Session 7:** Diagnosed n8n "Set up owner account" — wrong compose active; restored 20 workflows. Created restart-n8n.sh. Added timeout env vars (600s/900s). Model swap: all 5 agents → qwen3:14b-q4_K_M (9.3 GB, ~66 tok/s vs 2-5 tok/s). Rebuilt all personalities in Ollama. Git cleanup: removed SQLite/STL binaries, redundant docs. Created DISASTER-RECOVERY.md + MODEL-GUIDE.md. Updated TROUBLESHOOTING.md, USER-GUIDE.md, architecture.md, ROADMAP.md. Confirmed Slack: 11 commands registered, Event Subscriptions verified. Confirmed Open WebUI: all 5 agents showing at 14.8B. ComfyUI model download initiated. Commit: 9be2b12. |
