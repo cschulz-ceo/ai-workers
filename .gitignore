@@ -45,3 +45,15 @@ build/
 data/
 volumes/
 configs/network/tunnel-url.txt
+
+# n8n databases — never commit binary databases to git
+**/n8n_data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# 3D model outputs — large binaries
+output/3d/**/*.stl
+
+# Curl cookie files
+*:temp*

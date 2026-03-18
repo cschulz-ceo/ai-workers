@@ -1,5 +1,5 @@
 # Biulatech AI Workers — Session Context File
-**Last updated:** 2026-03-13 (session 5)
+**Last updated:** 2026-03-18 (session 7)
 **Purpose:** Context retention across Claude sessions. Update this file at the end of each working session.
 
 ---
@@ -54,7 +54,7 @@
 
 ## n8n Workflows — Full Inventory
 
-### Active (13)
+### Active (20)
 
 | Workflow | ID | Last Updated | Function |
 |----------|----|-------------|----------|
@@ -71,14 +71,13 @@
 | Tasks Channel Handler | i1TOhKVyXkLXD01W | 2026-03-11 | #tasks-* messages → Linear issue creation |
 | The Council — Unified Counsel Router | counsel-router-001 | **2026-03-12** | #the-council → sequential 4-member deliberation ✅ TESTED |
 | Weekly News Digest | d7350619-528b-... | **2026-03-12** | Every Monday 8am → 3 RSS feeds → Ollama → Slack |
-
-### Inactive (3) — Awaiting ComfyUI models
-
-| Workflow | ID | Blocker |
-|----------|----|---------|
-| ComfyUI Text to Image | comfyui-t2i-001 | No checkpoint in `/home/biulatech/ComfyUI/models/checkpoints/` |
-| ComfyUI Text to Video | comfyui-t2v-001 | Same |
-| ComfyUI Image Enhance | comfyui-enh-001 | Same |
+| 3D CAD Generator | cad-3d-001 | 2026-03-13 | /3d → OpenSCAD → STL + preview |
+| 3D Preview Image Server | preview-image-001 | 2026-03-13 | Serves 3D preview images |
+| ComfyUI Preview Server | comfyui-preview-001 | 2026-03-13 | Serves ComfyUI preview images |
+| Patent Spec Generator | patent-spec-001 | 2026-03-13 | /patent → Ollama → patent spec doc |
+| ComfyUI Text to Image | comfyui-t2i-001 | 2026-03-12 | /image → ComfyUI (needs checkpoint) |
+| ComfyUI Text to Video | comfyui-t2v-001 | 2026-03-12 | /video → ComfyUI (needs checkpoint) |
+| ComfyUI Image Enhance | comfyui-enh-001 | 2026-03-12 | /enhance → ComfyUI (needs checkpoint) |
 
 ---
 
@@ -123,7 +122,15 @@
 
 ## Current Blockers
 
-### 1. 🟡 ComfyUI — no model checkpoints
+### 1. 🔴 n8n running from wrong compose — WORKFLOWS MISSING IN UI
+**Root cause:** Another AI tool created `services/n8n/docker-compose.yml` which points to a fresh empty SQLite database at `services/n8n/n8n_data/`. The original compose at `/home/biulatech/n8n/docker-compose.yml` points to the real 18.5MB database with all 20 workflows + credentials.
+**Fix:** Run the restart script:
+```bash
+bash /home/biulatech/n8n/restart-n8n.sh
+```
+This stops all n8n containers and restarts from the original compose. Timeout settings (600s default, 900s max) have been added to handle long Ollama tasks.
+
+### 2. 🟡 ComfyUI — no model checkpoints
 **Fix:** Run the existing download script (FLUX.1-schnell, ~20GB, use tmux):
 ```bash
 tmux new-session -d -s comfyui-dl 'bash /home/biulatech/ai-workers-1/scripts/download-comfyui-models.sh 2>&1 | tee /tmp/comfyui-dl.log'
@@ -207,7 +214,8 @@ HF_TOKEN=<your_token> tmux new-session -d -s comfyui-dl 'bash /home/biulatech/ai
 |------|------|
 | n8n env (all secrets + channel IDs) | `/home/biulatech/n8n/.env` |
 | n8n Docker compose (live) | `/home/biulatech/n8n/docker-compose.yml` |
-| n8n Docker compose (git) | `/home/biulatech/ai-workers-1/services/n8n/docker-compose.yml` |
+| n8n Docker compose (queue — NOT active) | `/home/biulatech/ai-workers-1/configs/queue/docker-compose.yml` |
+| n8n restart script | `/home/biulatech/n8n/restart-n8n.sh` |
 | n8n SQLite database (all workflows) | `/home/biulatech/n8n/n8n_data/database.sqlite` |
 | Monitoring Docker compose | `/home/biulatech/monitoring/docker-compose.yml` |
 | Grafana dashboard JSON | `/home/biulatech/monitoring/grafana/dashboards/ai-workers-hub.json` |
@@ -231,3 +239,5 @@ HF_TOKEN=<your_token> tmux new-session -d -s comfyui-dl 'bash /home/biulatech/ai
 | 2026-03-12 | Validated all 10 webhook paths (10/10 passing). Fixed news-article-generator (responseMode, continueOnFail, Post to Slack URL + auth). Added Slack Events Receiver → #the-council routing (Switch Route + Ack Council + Forward to Council nodes). Fixed Council JS Task Runner sandbox issues: Config Set node for $env workaround, replaced $helpers/fetch with require('https') helper, added NODE_FUNCTION_ALLOW_BUILTIN=* to docker-compose. Tested The Council end-to-end — Chidi responded in #the-council ✅. Exported all active workflows + docker-compose to git. |
 | 2026-03-12 | Re-evaluated plan against actual repo state. Fixed jason.Modelfile path (~/ai-workers → ~/ai-workers-1), retired stale top-level workflows/ stubs (3 JSON files), added services/n8n/workflows/README.md. Confirmed llama3.1:70b alias + backup/export crons already present. Wired agent→Linear update loop: updated Slack Events Receiver to route TASK: messages in #tasks-* to Tasks Channel Handler (/webhook/slack-tasks) via new Switch[4] → Ack Task → Forward to Tasks nodes. Tasks Channel Handler already had complete Ollama+Linear+studio flow. |
 | 2026-03-12 | Fixed ComfyUI ae.safetensors download (HF_TOKEN support added to script). Populated workflow_published_version table (n8n v2.11.3 requires this for UI to display workflows). All 16 workflows now visible and active in n8n UI. ComfyUI t2i/t2v/enhance workflows activated — /image /video /enhance live. |
+| 2026-03-13 | (Other AI sessions) Added /3d and /patent Slack commands, 3D CAD Generator workflow, Patent Spec Generator, timeout fixes, Prometheus n8n exporter, various bug fixes. Attempted Redis/Postgres queue migration — broke n8n (empty Postgres DB, all workflows in SQLite). Partially reverted. |
+| 2026-03-18 | **Session 7:** Diagnosed n8n "Set up owner account" issue — wrong compose active (`services/n8n/` with empty SQLite instead of `/home/biulatech/n8n/` with 20 workflows). Created restart script. Added timeout/concurrency env vars to original compose (600s default, 900s max). Git cleanup: removed 18.5MB SQLite from tracking, 12 STL binaries, 5 redundant IMPLEMENTATION-COMPLETE docs, 3 redundant docs, stale services/n8n/docker-compose.yml. Updated .gitignore to block n8n_data/, .sqlite, .stl files. |
