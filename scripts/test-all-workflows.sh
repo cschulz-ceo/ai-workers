@@ -232,7 +232,13 @@ test_slack_command() {
     case "$status" in
       success)  mark_pass "$name" ;;
       error|crashed) mark_fail "$name" "execution ${status} — check n8n executions" ;;
-      timeout)  mark_warn "$name" "Ollama still processing after ${timeout_s}s — not necessarily failed" ;;
+      timeout)
+        mark_warn "$name" "Ollama still processing after ${timeout_s}s — draining before next test"
+        # Drain: keep waiting so the next test doesn't start while Ollama is busy.
+        # This prevents cascading failures when inference runs long.
+        log "Draining: waiting up to 10 more minutes for Ollama to finish..."
+        wait_for_completion "VqmllB5WdHsKmntj" 600 "$before_ts" > /dev/null
+        ;;
       *)        mark_warn "$name" "unexpected status: ${status}" ;;
     esac
   else
@@ -274,14 +280,19 @@ test_direct_json_webhook() {
     case "$status" in
       success)  mark_pass "$name" ;;
       error|crashed) mark_fail "$name" "execution ${status}" ;;
-      timeout)  mark_warn "$name" "no completion in ${timeout_s}s" ;;
+      timeout)
+        mark_warn "$name" "no completion in ${timeout_s}s — draining before next test"
+        # Drain: keep waiting so the GPU is free before the next test starts.
+        log "Draining: waiting up to 10 more minutes for execution to finish..."
+        wait_for_completion "$workflow_id" 600 "$before_ts" > /dev/null
+        ;;
       *)        mark_warn "$name" "unexpected: ${status}" ;;
     esac
   else
     mark_fail "$name" "HTTP ${http_code}"
   fi
 
-  sleep 8   # Ollama cooldown
+  sleep 10  # GPU cooldown (slightly longer than Ollama cooldown)
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -359,17 +370,17 @@ test_slack_command "/pm" \
   "HEALTH-CHECK-TEST: automated workflow validation — do not action" \
   120
 
-# /3d — Ollama + OpenSCAD render (~45s)
+# /3d — Ollama + OpenSCAD render (~4-5min with qwen3:14b)
 test_slack_command "/3d" \
   "/3d" \
   "simple test cube 5mm sides" \
-  150
+  360
 
-# /patent — Ollama doc generation (~60s)
+# /patent — Ollama doc generation (~4-5min with qwen3:14b)
 test_slack_command "/patent" \
   "/patent" \
   "automated workflow health monitoring system" \
-  150
+  360
 
 # ── GROUP 4: ComfyUI — models ready, run inference tests ─────────────────────
 log "--- Group 4: ComfyUI (models loaded) ---"
@@ -380,12 +391,12 @@ if [[ "$MODE" != "--quick" && "$MODE" != "--dry-run" ]]; then
   sleep 15
 fi
 
-# /image — SDXL Base 1.0 text-to-image (~60-120s on RTX 5070 Ti)
+# /image — SDXL Base 1.0 text-to-image (~8-10min on RTX 5070 Ti with FLUX nodes)
 test_direct_json_webhook "/image (ComfyUI Text to Image)" \
   "comfyui-image" \
   "{\"prompt\":\"a simple red sphere on a white background\",\"channel_id\":\"${TEST_CHANNEL}\",\"user_id\":\"${TEST_USER}\"}" \
   "comfyui-t2i-001" \
-  240
+  720
 
 # /video — AnimateDiff text-to-video (~90-180s)
 test_direct_json_webhook "/video (ComfyUI Text to Video)" \
