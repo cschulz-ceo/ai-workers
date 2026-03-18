@@ -1,0 +1,471 @@
+{
+  "id": "workflow-test-001",
+  "name": "Workflow Test Runner",
+  "active": true,
+  "nodes": [
+    {
+      "id": "wtr-webhook-001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "path": "workflow-tests",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "wtr-parse-001",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst mode = (body.text || '').trim().toLowerCase();\n// mode: empty = full, 'quick' = skip Ollama, 'status' = active check only\nreturn [{ json: {\n  mode: mode || 'full',\n  channelId: body.channel_id || 'C0AKZLGHQE6',\n  userId: body.user_id || 'U0AKBNLRXMY',\n  responseUrl: body.response_url || '',\n  startedAt: new Date().toISOString(),\n  results: []\n}}];"
+      }
+    },
+    {
+      "id": "wtr-ack-001",
+      "name": "Ack Slack",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ JSON.stringify({ response_type: 'ephemeral', text: ':test_tube: Running workflow health check (mode: `' + $json.mode + '`) — results in #ops-pulse...' }) }",
+        "options": {}
+      }
+    },
+    {
+      "id": "wtr-test-status-001",
+      "name": "Test /ai-status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 180],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/slack-status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/x-www-form-urlencoded" }]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "command", "value": "/ai-status" },
+            { "name": "text",    "value": "" },
+            { "name": "channel_id", "value": "={{ $('Parse Request').first().json.channelId }}" },
+            { "name": "user_id",    "value": "={{ $('Parse Request').first().json.userId }}" },
+            { "name": "user_name",  "value": "health-check" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "wtr-test-diagnose-001",
+      "name": "Test /ai-diagnose",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/slack-diagnose",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/x-www-form-urlencoded" }]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "command", "value": "/ai-diagnose" },
+            { "name": "text",    "value": "" },
+            { "name": "channel_id", "value": "={{ $('Parse Request').first().json.channelId }}" },
+            { "name": "user_id",    "value": "={{ $('Parse Request').first().json.userId }}" },
+            { "name": "user_name",  "value": "health-check" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "wtr-collect-fast-001",
+      "name": "Collect Fast Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1120, 240],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      }
+    },
+    {
+      "id": "wtr-check-mode-001",
+      "name": "Skip Ollama If Quick",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 240],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $('Parse Request').first().json.mode }}",
+              "rightValue": "quick",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "wtr-ai-001",
+      "name": "Test /ai",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/slack-command",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/x-www-form-urlencoded" }]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "command",      "value": "/ai" },
+            { "name": "text",         "value": "health check: reply with exactly: OK" },
+            { "name": "channel_id",   "value": "={{ $('Parse Request').first().json.channelId }}" },
+            { "name": "user_id",      "value": "={{ $('Parse Request').first().json.userId }}" },
+            { "name": "user_name",    "value": "health-check" },
+            { "name": "response_url", "value": "={{ $env.SLACK_INCOMING_WEBHOOK_URL }}" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "wtr-wait-ai-001",
+      "name": "Wait After /ai",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1780, 160],
+      "parameters": {
+        "amount": 25,
+        "unit": "seconds"
+      },
+      "webhookId": "wtr-wait-ai-wh"
+    },
+    {
+      "id": "wtr-news-001",
+      "name": "Test /news",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/slack-command",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/x-www-form-urlencoded" }]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "command",      "value": "/news" },
+            { "name": "text",         "value": "AI automation technology" },
+            { "name": "channel_id",   "value": "={{ $('Parse Request').first().json.channelId }}" },
+            { "name": "user_id",      "value": "={{ $('Parse Request').first().json.userId }}" },
+            { "name": "user_name",    "value": "health-check" },
+            { "name": "response_url", "value": "={{ $env.SLACK_INCOMING_WEBHOOK_URL }}" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "wtr-wait-news-001",
+      "name": "Wait After /news",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2220, 160],
+      "parameters": {
+        "amount": 45,
+        "unit": "seconds"
+      },
+      "webhookId": "wtr-wait-news-wh"
+    },
+    {
+      "id": "wtr-pm-001",
+      "name": "Test /pm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2440, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/slack-command",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/x-www-form-urlencoded" }]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "command",      "value": "/pm" },
+            { "name": "text",         "value": "HEALTH-CHECK-TEST automated validation do not action" },
+            { "name": "channel_id",   "value": "={{ $('Parse Request').first().json.channelId }}" },
+            { "name": "user_id",      "value": "={{ $('Parse Request').first().json.userId }}" },
+            { "name": "user_name",    "value": "health-check" },
+            { "name": "response_url", "value": "={{ $env.SLACK_INCOMING_WEBHOOK_URL }}" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "wtr-wait-pm-001",
+      "name": "Wait After /pm",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2660, 160],
+      "parameters": {
+        "amount": 35,
+        "unit": "seconds"
+      },
+      "webhookId": "wtr-wait-pm-wh"
+    },
+    {
+      "id": "wtr-3d-001",
+      "name": "Test /3d",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/slack-command",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/x-www-form-urlencoded" }]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "command",      "value": "/3d" },
+            { "name": "text",         "value": "simple test cube 5mm" },
+            { "name": "channel_id",   "value": "={{ $('Parse Request').first().json.channelId }}" },
+            { "name": "user_id",      "value": "={{ $('Parse Request').first().json.userId }}" },
+            { "name": "user_name",    "value": "health-check" },
+            { "name": "response_url", "value": "={{ $env.SLACK_INCOMING_WEBHOOK_URL }}" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "wtr-wait-3d-001",
+      "name": "Wait After /3d",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [3100, 160],
+      "parameters": {
+        "amount": 50,
+        "unit": "seconds"
+      },
+      "webhookId": "wtr-wait-3d-wh"
+    },
+    {
+      "id": "wtr-patent-001",
+      "name": "Test /patent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3320, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/slack-command",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/x-www-form-urlencoded" }]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "command",      "value": "/patent" },
+            { "name": "text",         "value": "automated workflow health monitoring system" },
+            { "name": "channel_id",   "value": "={{ $('Parse Request').first().json.channelId }}" },
+            { "name": "user_id",      "value": "={{ $('Parse Request').first().json.userId }}" },
+            { "name": "user_name",    "value": "health-check" },
+            { "name": "response_url", "value": "={{ $env.SLACK_INCOMING_WEBHOOK_URL }}" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "wtr-wait-patent-001",
+      "name": "Wait After /patent",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [3540, 160],
+      "parameters": {
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "webhookId": "wtr-wait-patent-wh"
+    },
+    {
+      "id": "wtr-build-report-001",
+      "name": "Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3760, 160],
+      "parameters": {
+        "jsCode": "// Collect all HTTP response results\n// n8n passes us the last node's output; we use node references to check each\nconst checks = [];\n\n// Helper to evaluate a test node result\nfunction evalNode(label, nodeData) {\n  try {\n    const code = nodeData?.json?.statusCode || nodeData?.statusCode || 0;\n    const ok = code >= 200 && code < 300;\n    return { label, ok, code };\n  } catch(e) {\n    return { label, ok: false, code: 0, err: String(e) };\n  }\n}\n\n// Fast tests\nchecks.push(evalNode('/ai-status',  $('Test /ai-status').first()));\nchecks.push(evalNode('/ai-diagnose',$('Test /ai-diagnose').first()));\n\n// Ollama tests (only if full mode)\nconst mode = $('Parse Request').first().json.mode;\nif (mode !== 'quick') {\n  checks.push(evalNode('/ai',     $('Test /ai').first()));\n  checks.push(evalNode('/news',   $('Test /news').first()));\n  checks.push(evalNode('/pm',     $('Test /pm').first()));\n  checks.push(evalNode('/3d',     $('Test /3d').first()));\n  checks.push(evalNode('/patent', $('Test /patent').first()));\n}\n\nconst pass  = checks.filter(c => c.ok).length;\nconst fail  = checks.filter(c => !c.ok).length;\nconst lines = checks.map(c => c.ok\n  ? `✅  *${c.label}*  — ack ${c.code}`\n  : `❌  *${c.label}*  — HTTP ${c.code}`\n);\n\n// Always-skip section\nlines.push('⏭️  */image /video /enhance*  — Awaiting ComfyUI model download');\nlines.push('⏭️  *The Council*  — Requires live Slack event');\n\nconst icon = fail === 0 ? ':white_check_mark:' : ':x:';\nconst summary = fail === 0\n  ? `${pass} workflows healthy`\n  : `${fail} FAILED — ${pass} passed`;\n\nreturn [{ json: {\n  pass, fail,\n  mode,\n  icon,\n  summary,\n  lines: lines.join('\\n'),\n  startedAt: $('Parse Request').first().json.startedAt,\n  completedAt: new Date().toISOString()\n}}];"
+      }
+    },
+    {
+      "id": "wtr-post-report-001",
+      "name": "Post Report to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3980, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.SLACK_BOT_TOKEN }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "channel", "value": "C0AKZLGHQE6" },
+            {
+              "name": "blocks",
+              "value": "={{ JSON.stringify([\n  { type: 'header', text: { type: 'plain_text', text: 'Workflow Health Report' } },\n  { type: 'section', fields: [\n    { type: 'mrkdwn', text: '*Mode:* `' + $json.mode + '`' },\n    { type: 'mrkdwn', text: '*Passed:* ' + $json.pass },\n    { type: 'mrkdwn', text: '*Failed:* ' + $json.fail }\n  ]},\n  { type: 'divider' },\n  { type: 'section', text: { type: 'mrkdwn', text: $json.lines.substring(0, 2800) } },\n  { type: 'divider' },\n  { type: 'context', elements: [{ type: 'mrkdwn', text: $json.icon + ' *' + $json.summary + '*' }] }\n]) }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wtr-skip-report-001",
+      "name": "Post Quick-Mode Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 360],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.SLACK_BOT_TOKEN }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "channel", "value": "C0AKZLGHQE6" },
+            {
+              "name": "text",
+              "value": "=:fast_forward: *Quick mode:* Skipped Ollama tests. Fast checks:\n• /ai-status: {{ $('Test /ai-status').first().json.statusCode || '?' }}\n• /ai-diagnose: {{ $('Test /ai-diagnose').first().json.statusCode || '?' }}\n\nRun `/ai-test` with no args for full test."
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Parse Request", "type": "main", "index": 0 }]]
+    },
+    "Parse Request": {
+      "main": [[{ "node": "Ack Slack", "type": "main", "index": 0 }]]
+    },
+    "Ack Slack": {
+      "main": [
+        [
+          { "node": "Test /ai-status",  "type": "main", "index": 0 },
+          { "node": "Test /ai-diagnose","type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Test /ai-status": {
+      "main": [[{ "node": "Collect Fast Results", "type": "main", "index": 0 }]]
+    },
+    "Test /ai-diagnose": {
+      "main": [[{ "node": "Collect Fast Results", "type": "main", "index": 1 }]]
+    },
+    "Collect Fast Results": {
+      "main": [[{ "node": "Skip Ollama If Quick", "type": "main", "index": 0 }]]
+    },
+    "Skip Ollama If Quick": {
+      "main": [
+        [{ "node": "Test /ai",            "type": "main", "index": 0 }],
+        [{ "node": "Post Quick-Mode Report","type": "main", "index": 0 }]
+      ]
+    },
+    "Test /ai": {
+      "main": [[{ "node": "Wait After /ai", "type": "main", "index": 0 }]]
+    },
+    "Wait After /ai": {
+      "main": [[{ "node": "Test /news",     "type": "main", "index": 0 }]]
+    },
+    "Test /news": {
+      "main": [[{ "node": "Wait After /news","type": "main", "index": 0 }]]
+    },
+    "Wait After /news": {
+      "main": [[{ "node": "Test /pm",       "type": "main", "index": 0 }]]
+    },
+    "Test /pm": {
+      "main": [[{ "node": "Wait After /pm", "type": "main", "index": 0 }]]
+    },
+    "Wait After /pm": {
+      "main": [[{ "node": "Test /3d",       "type": "main", "index": 0 }]]
+    },
+    "Test /3d": {
+      "main": [[{ "node": "Wait After /3d", "type": "main", "index": 0 }]]
+    },
+    "Wait After /3d": {
+      "main": [[{ "node": "Test /patent",   "type": "main", "index": 0 }]]
+    },
+    "Test /patent": {
+      "main": [[{ "node": "Wait After /patent","type": "main", "index": 0 }]]
+    },
+    "Wait After /patent": {
+      "main": [[{ "node": "Build Report",   "type": "main", "index": 0 }]]
+    },
+    "Build Report": {
+      "main": [[{ "node": "Post Report to Slack","type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

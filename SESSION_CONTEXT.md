@@ -82,6 +82,7 @@
 | ComfyUI Text to Image | comfyui-t2i-001 | 2026-03-12 | /image → ComfyUI (needs checkpoint) |
 | ComfyUI Text to Video | comfyui-t2v-001 | 2026-03-12 | /video → ComfyUI (needs checkpoint) |
 | ComfyUI Image Enhance | comfyui-enh-001 | 2026-03-12 | /enhance → ComfyUI (needs checkpoint) |
+| Workflow Test Runner | workflow-test-001 | **2026-03-18** | /ai-test → sequential workflow health check → #ops-pulse |
 
 ---
 
@@ -143,8 +144,6 @@ After download completes: verify ComfyUI at localhost:8188, then test /image, /v
 
 ### 2. 🔲 `/ai-draw` — registered in Slack but n8n workflow not fully wired
 The command exists in the Slack app. Needs a dedicated n8n workflow or routing in the Slack Command Handler.
-
-### ✅ Previously resolved
 
 ### ✅ Previously resolved
 - Ollama binding: `0.0.0.0:11434` — systemd override applied 2026-03-12
@@ -242,3 +241,4 @@ The command exists in the Slack app. Needs a dedicated n8n workflow or routing i
 | 2026-03-12 | Fixed ComfyUI ae.safetensors download (HF_TOKEN support added to script). Populated workflow_published_version table (n8n v2.11.3 requires this for UI to display workflows). All 16 workflows now visible and active in n8n UI. ComfyUI t2i/t2v/enhance workflows activated — /image /video /enhance live. |
 | 2026-03-13 | (Other AI sessions) Added /3d and /patent Slack commands, 3D CAD Generator workflow, Patent Spec Generator, timeout fixes, Prometheus n8n exporter, various bug fixes. Attempted Redis/Postgres queue migration — broke n8n (empty Postgres DB, all workflows in SQLite). Partially reverted. |
 | 2026-03-18 | **Session 7:** Diagnosed n8n "Set up owner account" — wrong compose active; restored 20 workflows. Created restart-n8n.sh. Added timeout env vars (600s/900s). Model swap: all 5 agents → qwen3:14b-q4_K_M (9.3 GB, ~66 tok/s vs 2-5 tok/s). Rebuilt all personalities in Ollama. Git cleanup: removed SQLite/STL binaries, redundant docs. Created DISASTER-RECOVERY.md + MODEL-GUIDE.md. Updated TROUBLESHOOTING.md, USER-GUIDE.md, architecture.md, ROADMAP.md. Confirmed Slack: 11 commands registered, Event Subscriptions verified. Confirmed Open WebUI: all 5 agents showing at 14.8B. ComfyUI model download initiated. Commit: 9be2b12. |
+| 2026-03-18 | **Session 7 (cont.):** Fixed routing bug — `/image` (and all studio/news commands) was triggering ALL 4 downstream workflows simultaneously. Root cause: `Ack Studio Command` node had Image+Video+Enhance+News all wired as parallel outputs. Fix: added `Route Studio` Switch node (expression mode, 4 outputs) to route to only the correct downstream. Applied to DB (versionId 4bf2b25b) + git (commit 5231709). **n8n needs restart to load fix.** Created `scripts/test-all-workflows.sh` (sequential test runner with Ollama throttling, Slack report) and `workflow-test-runner.json` (n8n workflow for future `/ai-test` Slack command). |
