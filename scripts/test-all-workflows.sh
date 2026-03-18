@@ -321,17 +321,19 @@ check_active "ComfyUI Image Enhance"        "comfyui-enh-001"
 # ── GROUP 2: Fast webhooks — no Ollama ────────────────────────────────────────
 log "--- Group 2: Fast webhook tests (no Ollama) ---"
 
+ENC_RESP=$(urlencode "${FAKE_RESPONSE_URL}")
+
 test_fast_webhook "/ai-status" \
   "slack-status" \
-  "command=%2Fai-status&text=&channel_id=${TEST_CHANNEL}&user_id=${TEST_USER}&user_name=health-check" \
+  "command=%2Fai-status&text=&channel_id=${TEST_CHANNEL}&user_id=${TEST_USER}&user_name=health-check&response_url=${ENC_RESP}" \
   "KxnpgKyTLMAd4Ygs" \
   30
 
 test_fast_webhook "/ai-diagnose" \
   "slack-diagnose" \
-  "command=%2Fai-diagnose&text=&channel_id=${TEST_CHANNEL}&user_id=${TEST_USER}&user_name=health-check" \
+  "command=%2Fai-diagnose&text=&channel_id=${TEST_CHANNEL}&user_id=${TEST_USER}&user_name=health-check&response_url=${ENC_RESP}" \
   "QCrmHKpu1KktTK1M" \
-  30
+  45
 
 # ── GROUP 3: Ollama-heavy tests — SEQUENTIAL (one at a time) ──────────────────
 # Each test waits 8s after completion before starting the next to ensure

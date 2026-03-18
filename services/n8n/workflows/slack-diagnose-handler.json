@@ -1,5 +1,7 @@
 {
+  "id": "QCrmHKpu1KktTK1M",
   "name": "Slack Diagnose Handler",
+  "active": true,
   "nodes": [
     {
       "parameters": {
@@ -12,7 +14,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "webhookId": "slack-diagnose"
     },
     {
@@ -27,7 +32,10 @@
       "name": "Ack Command",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [420, 300]
+      "position": [
+        420,
+        300
+      ]
     },
     {
       "parameters": {
@@ -41,7 +49,11 @@
       "name": "Ollama Models",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 200]
+      "position": [
+        640,
+        200
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -55,7 +67,11 @@
       "name": "Ollama Running",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 320]
+      "position": [
+        640,
+        320
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -82,7 +98,11 @@
       "name": "Kevin Ping",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 440]
+      "position": [
+        640,
+        440
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -96,7 +116,10 @@
       "name": "n8n Health",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 560]
+      "position": [
+        640,
+        560
+      ]
     },
     {
       "parameters": {
@@ -107,7 +130,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer CONFIGURE_IN_N8N_CREDENTIALS"
+              "value": "Bearer ={{ $env.SLACK_BOT_TOKEN }}"
             }
           ]
         },
@@ -119,17 +142,24 @@
       "name": "Slack Auth Test",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [640, 680]
+      "position": [
+        640,
+        680
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
-        "jsCode": "// Gather all diagnostic results and build report\nconst webhookData = $('Webhook').first().json.body;\nconst responseUrl = webhookData.response_url || '';\nconst userId = webhookData.user_id || 'unknown';\nconst channelId = webhookData.channel_id || '';\n\n// Ollama models\nlet modelsStatus = '❌ Unreachable';\nlet modelsList = [];\ntry {\n  const modelsData = $('Ollama Models').first().json;\n  modelsList = (modelsData.models || []).map(m => m.name);\n  modelsStatus = `✅ ${modelsList.length} models available`;\n} catch(e) { modelsStatus = `❌ Error: ${e.message}`; }\n\n// Ollama running\nlet runningStatus = '❌ No models loaded';\ntry {\n  const psData = $('Ollama Running').first().json;\n  const running = psData.models || [];\n  runningStatus = running.length > 0\n    ? `✅ ${running.map(m => m.name).join(', ')}`\n    : '⚠️ No models currently loaded in VRAM';\n} catch(e) { runningStatus = `❌ Error: ${e.message}`; }\n\n// Kevin ping\nlet kevinStatus = '❌ No response';\ntry {\n  const kevinData = $('Kevin Ping').first().json;\n  const reply = kevinData.message?.content || '';\n  kevinStatus = reply.trim() ? `✅ Responded: \"${reply.trim().slice(0, 50)}\"` : '⚠️ Empty response';\n} catch(e) { kevinStatus = `❌ Error: ${e.message}`; }\n\n// n8n health\nlet n8nStatus = '❌ Unreachable';\ntry {\n  const n8nData = $('n8n Health').first().json;\n  n8nStatus = n8nData.status === 'ok' ? '✅ Healthy' : `⚠️ Status: ${n8nData.status}`;\n} catch(e) { n8nStatus = `❌ Error: ${e.message}`; }\n\n// Slack auth\nlet slackStatus = '❌ Auth failed';\ntry {\n  const slackData = $('Slack Auth Test').first().json;\n  if (slackData.ok) {\n    slackStatus = `✅ Connected as @${slackData.bot_id || slackData.user_id}`;\n  } else {\n    slackStatus = `❌ Error: ${slackData.error}`;\n  }\n} catch(e) { slackStatus = `❌ Error: ${e.message}`; }\n\n// Personality models check\nconst personalities = ['kevin:latest', 'jason:latest', 'scaachi:latest', 'christian:latest', 'chidi:latest'];\nconst missingPersonalities = personalities.filter(p => !modelsList.includes(p));\nconst personalitiesStatus = missingPersonalities.length === 0\n  ? `✅ All 5 personalities loaded`\n  : `⚠️ Missing: ${missingPersonalities.join(', ')}`;\n\n// Build the report\nconst now = new Date().toISOString().slice(0, 19).replace('T', ' ') + ' UTC';\n\nconst reportText = [\n  `*🔬 AI Workers Diagnostic Report*`,\n  `_Run by <@${userId}> at ${now}_`,\n  ``,\n  `*Infrastructure*`,\n  `• n8n Automation: ${n8nStatus}`,\n  `• Slack API: ${slackStatus}`,\n  ``,\n  `*Ollama / Models*`,\n  `• Ollama Service: ${modelsStatus}`,\n  `• Personalities: ${personalitiesStatus}`,\n  `• VRAM Loaded: ${runningStatus}`,\n  ``,\n  `*Live Test*`,\n  `• Kevin Response: ${kevinStatus}`,\n  ``,\n  `*Available Models (${modelsList.length})*`,\n  modelsList.length > 0 ? modelsList.map(m => `  · ${m}`).join('\\n') : '  _none_'\n].join('\\n');\n\nreturn [{ json: { responseUrl, channelId, reportText } }];"
+        "jsCode": "// Gather all diagnostic results and build report\nconst webhookData = $('Webhook').first().json.body;\nconst responseUrl = webhookData.response_url || '';\nconst userId = webhookData.user_id || 'unknown';\nconst channelId = webhookData.channel_id || '';\n\n// Ollama models\nlet modelsStatus = '\u274c Unreachable';\nlet modelsList = [];\ntry {\n  const modelsData = $('Ollama Models').first().json;\n  modelsList = (modelsData.models || []).map(m => m.name);\n  modelsStatus = `\u2705 ${modelsList.length} models available`;\n} catch(e) { modelsStatus = `\u274c Error: ${e.message}`; }\n\n// Ollama running\nlet runningStatus = '\u274c No models loaded';\ntry {\n  const psData = $('Ollama Running').first().json;\n  const running = psData.models || [];\n  runningStatus = running.length > 0\n    ? `\u2705 ${running.map(m => m.name).join(', ')}`\n    : '\u26a0\ufe0f No models currently loaded in VRAM';\n} catch(e) { runningStatus = `\u274c Error: ${e.message}`; }\n\n// Kevin ping\nlet kevinStatus = '\u274c No response';\ntry {\n  const kevinData = $('Kevin Ping').first().json;\n  const reply = kevinData.message?.content || '';\n  kevinStatus = reply.trim() ? `\u2705 Responded: \"${reply.trim().slice(0, 50)}\"` : '\u26a0\ufe0f Empty response';\n} catch(e) { kevinStatus = `\u274c Error: ${e.message}`; }\n\n// n8n health\nlet n8nStatus = '\u274c Unreachable';\ntry {\n  const n8nData = $('n8n Health').first().json;\n  n8nStatus = n8nData.status === 'ok' ? '\u2705 Healthy' : `\u26a0\ufe0f Status: ${n8nData.status}`;\n} catch(e) { n8nStatus = `\u274c Error: ${e.message}`; }\n\n// Slack auth\nlet slackStatus = '\u274c Auth failed';\ntry {\n  const slackData = $('Slack Auth Test').first().json;\n  if (slackData.ok) {\n    slackStatus = `\u2705 Connected as @${slackData.bot_id || slackData.user_id}`;\n  } else {\n    slackStatus = `\u274c Error: ${slackData.error}`;\n  }\n} catch(e) { slackStatus = `\u274c Error: ${e.message}`; }\n\n// Personality models check\nconst personalities = ['kevin:latest', 'jason:latest', 'scaachi:latest', 'christian:latest', 'chidi:latest'];\nconst missingPersonalities = personalities.filter(p => !modelsList.includes(p));\nconst personalitiesStatus = missingPersonalities.length === 0\n  ? `\u2705 All 5 personalities loaded`\n  : `\u26a0\ufe0f Missing: ${missingPersonalities.join(', ')}`;\n\n// Build the report\nconst now = new Date().toISOString().slice(0, 19).replace('T', ' ') + ' UTC';\n\nconst reportText = [\n  `*\ud83d\udd2c AI Workers Diagnostic Report*`,\n  `_Run by <@${userId}> at ${now}_`,\n  ``,\n  `*Infrastructure*`,\n  `\u2022 n8n Automation: ${n8nStatus}`,\n  `\u2022 Slack API: ${slackStatus}`,\n  ``,\n  `*Ollama / Models*`,\n  `\u2022 Ollama Service: ${modelsStatus}`,\n  `\u2022 Personalities: ${personalitiesStatus}`,\n  `\u2022 VRAM Loaded: ${runningStatus}`,\n  ``,\n  `*Live Test*`,\n  `\u2022 Kevin Response: ${kevinStatus}`,\n  ``,\n  `*Available Models (${modelsList.length})*`,\n  modelsList.length > 0 ? modelsList.map(m => `  \u00b7 ${m}`).join('\\n') : '  _none_'\n].join('\\n');\n\nreturn [{ json: { responseUrl, channelId, reportText } }];"
       },
       "id": "node-build-report",
       "name": "Build Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [860, 440]
+      "position": [
+        860,
+        440
+      ]
     },
     {
       "parameters": {
@@ -154,7 +184,11 @@
       "name": "Post to Channel",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1080, 440]
+      "position": [
+        1080,
+        440
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -165,7 +199,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer CONFIGURE_IN_N8N_CREDENTIALS"
+              "value": "Bearer ={{ $env.SLACK_BOT_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -183,7 +217,11 @@
       "name": "Post to ops-status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1300, 440]
+      "position": [
+        1300,
+        440
+      ],
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -289,6 +327,5 @@
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "active": false
+  }
 }

@@ -1,5 +1,7 @@
 {
+  "id": "KxnpgKyTLMAd4Ygs",
   "name": "Slack Status Handler",
+  "active": true,
   "nodes": [
     {
       "parameters": {
@@ -8,13 +10,13 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "node-webhook",
+      "id": "0455cc52-4299-4d24-a669-ea6e6e84c350",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        200,
-        300
+        -2464,
+        528
       ],
       "webhookId": "slack-status"
     },
@@ -34,77 +36,77 @@
           }
         }
       },
-      "id": "node-ack",
+      "id": "7f9f1f8c-83e8-4f61-b80a-93bf670f44d8",
       "name": "Ack Slack",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        420,
-        300
+        -2256,
+        528
       ]
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "http://host.docker.internal:11434/api/tags",
         "options": {
-          "timeout": 600000
+          "timeout": 10000
         }
       },
-      "id": "node-ollama-models",
+      "id": "c87567fa-5023-44bf-93c5-b08114e3a27b",
       "name": "Ollama Models",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        640,
-        300
-      ]
+        -2032,
+        528
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "http://host.docker.internal:11434/api/ps",
         "options": {
-          "timeout": 600000
+          "timeout": 10000
         }
       },
-      "id": "node-ollama-ps",
+      "id": "90c0e86c-668b-49f3-9084-7037e270bfae",
       "name": "Ollama Running",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        860,
-        300
-      ]
+        -1808,
+        528
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "http://host.docker.internal:5678/healthz",
         "options": {
           "timeout": 5000
         }
       },
-      "id": "node-n8n-health",
+      "id": "5e1a88dd-b4bc-4f71-b65f-92e27c4f8fd5",
       "name": "n8n Health",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1060,
-        300
-      ]
+        -1616,
+        528
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
         "jsCode": "const modelsData = $('Ollama Models').first().json;\nconst psData = $('Ollama Running').first().json;\nconst n8nData = $('n8n Health').first().json;\nconst webhookBody = $('Webhook').first().json.body || {};\n\nconst allModels = modelsData.models || [];\nconst PERSONALITY_NAMES = ['kevin','jason','scaachi','christian','chidi'];\nconst personalities = allModels.filter(m =>\n  PERSONALITY_NAMES.some(p => m.name.startsWith(p))\n);\n\nconst running = psData.models || [];\nlet vramUsed = 0;\nlet runningNames = [];\nfor (const m of running) {\n  vramUsed += (m.size_vram || 0);\n  runningNames.push(m.name.split(':')[0]);\n}\nconst vramGB = (vramUsed / 1e9).toFixed(1);\n\nconst ollamaOk = allModels.length > 0;\nconst n8nOk = n8nData.status === 'ok';\n\nconst ollamaIcon = ollamaOk ? ':large_green_circle:' : ':red_circle:';\nconst n8nIcon = n8nOk ? ':large_green_circle:' : ':red_circle:';\nconst runningText = runningNames.length > 0\n  ? runningNames.join(', ') + ' (' + vramGB + 'GB VRAM)'\n  : 'none (models unloaded)';\n\nconst personalityList = personalities.map(m => m.name.split(':')[0]).join(', ') || 'none';\n\nconst now = new Date().toLocaleString('en-US', {\n  timeZone: 'America/New_York', hour12: true,\n  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'\n});\n\nconst lines = [\n  '*ai-workers system status* \u2014 ' + now,\n  '',\n  ollamaIcon + ' *Ollama* \u2014 ' + allModels.length + ' models available',\n  '  Personalities: ' + personalityList,\n  '  In memory: ' + runningText,\n  '',\n  n8nIcon + ' *n8n* \u2014 ' + (n8nOk ? 'healthy' : 'DOWN'),\n  '  Tunnel: https://appendicular-wilson-looser.ngrok-free.dev',\n  '',\n  ':large_green_circle: *Open WebUI* \u2014 http://localhost:8080'\n];\n\nreturn [{ json: {\n  statusText: lines.join('\\n'),\n  responseUrl: webhookBody.response_url || ''\n}}];"
       },
-      "id": "node-build",
+      "id": "f0e07409-7ca7-492a-ae3d-cf84f13d21c9",
       "name": "Build Status",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1260,
-        300
+        -1408,
+        528
       ]
     },
     {
@@ -126,14 +128,15 @@
         "body": "={{ JSON.stringify({ response_type: 'in_channel', text: $json.statusText }) }}",
         "options": {}
       },
-      "id": "node-post-response",
+      "id": "da80b6d5-01f0-4fa9-81f8-ba31f47f4c69",
       "name": "Post to Command Channel",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1480,
-        200
-      ]
+        -1184,
+        416
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -144,7 +147,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer CONFIGURE_IN_N8N_CREDENTIALS"
+              "value": "Bearer ={{ $env.SLACK_BOT_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -158,14 +161,15 @@
         "body": "={{ JSON.stringify({ channel: 'C0AKT94FE4T', text: $json.statusText }) }}",
         "options": {}
       },
-      "id": "node-post-ops",
+      "id": "50f01ff6-5478-42f8-a914-ee19da0a9039",
       "name": "Post to #ops-status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1480,
-        400
-      ]
+        -1184,
+        624
+      ],
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -242,7 +246,8 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
-  },
-  "active": false
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
 }

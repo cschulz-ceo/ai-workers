@@ -145,7 +145,15 @@ After download completes: verify ComfyUI at localhost:8188, then test /image, /v
 ### 2. 🔲 `/ai-draw` — registered in Slack but n8n workflow not fully wired
 The command exists in the Slack app. Needs a dedicated n8n workflow or routing in the Slack Command Handler.
 
-### ✅ Previously resolved
+### ✅ Previously resolved (this session)
+- **Slack Command Handler routing bug** — `/image` was firing Image+Video+Enhance+News simultaneously. Added `Route Studio` Switch node. Commit 5231709.
+- **All Slack-posting terminal nodes** — added `continueOnFail: true` to `Post to Slack`, `Post to Command Channel`, `Post to Channel` and all downstream-call nodes across 4 workflows. Execution no longer fails if Slack's `response_url` is expired/empty.
+- **News Article Generator** — webhook was `lastNode` (blocks caller for 60s). Fixed to `responseNode` + added `Respond OK` node for immediate ack. Caller (`Call News Search`) now gets 202 within milliseconds.
+- **Call News Search timeout** — increased 10s → 30s.
+- **test-all-workflows.sh** — fixed to pass `response_url` in all test calls.
+- Commits: 5231709, a6d5f02, (workflow-fix commit pending)
+
+### ✅ Previously resolved (earlier sessions)
 - Ollama binding: `0.0.0.0:11434` — systemd override applied 2026-03-12
 - ngrok web UI: `0.0.0.0:4040` — systemd service installed 2026-03-12, config indentation fixed
 - GPU exporter: running on `0.0.0.0:9835` — Prometheus scraping
@@ -242,3 +250,4 @@ The command exists in the Slack app. Needs a dedicated n8n workflow or routing i
 | 2026-03-13 | (Other AI sessions) Added /3d and /patent Slack commands, 3D CAD Generator workflow, Patent Spec Generator, timeout fixes, Prometheus n8n exporter, various bug fixes. Attempted Redis/Postgres queue migration — broke n8n (empty Postgres DB, all workflows in SQLite). Partially reverted. |
 | 2026-03-18 | **Session 7:** Diagnosed n8n "Set up owner account" — wrong compose active; restored 20 workflows. Created restart-n8n.sh. Added timeout env vars (600s/900s). Model swap: all 5 agents → qwen3:14b-q4_K_M (9.3 GB, ~66 tok/s vs 2-5 tok/s). Rebuilt all personalities in Ollama. Git cleanup: removed SQLite/STL binaries, redundant docs. Created DISASTER-RECOVERY.md + MODEL-GUIDE.md. Updated TROUBLESHOOTING.md, USER-GUIDE.md, architecture.md, ROADMAP.md. Confirmed Slack: 11 commands registered, Event Subscriptions verified. Confirmed Open WebUI: all 5 agents showing at 14.8B. ComfyUI model download initiated. Commit: 9be2b12. |
 | 2026-03-18 | **Session 7 (cont.):** Fixed routing bug — `/image` (and all studio/news commands) was triggering ALL 4 downstream workflows simultaneously. Root cause: `Ack Studio Command` node had Image+Video+Enhance+News all wired as parallel outputs. Fix: added `Route Studio` Switch node (expression mode, 4 outputs) to route to only the correct downstream. Applied to DB (versionId 4bf2b25b) + git (commit 5231709). **n8n needs restart to load fix.** Created `scripts/test-all-workflows.sh` (sequential test runner with Ollama throttling, Slack report) and `workflow-test-runner.json` (n8n workflow for future `/ai-test` Slack command). |
+| 2026-03-18 | **Session 7 (cont. 2):** Ran test-all-workflows.sh — found 4 execution errors. Fixed: (1) `Post to Command Channel`/`Post to Channel` failing with "Invalid URL" when `response_url` empty — added `continueOnFail: true` across all terminal Slack-posting nodes in status/diagnose/command/news workflows. (2) News Article Generator webhook was `lastNode` (blocks caller 60s) — changed to `responseNode` + added `Respond OK` early ack. (3) `Call News Search` timeout 10s → 30s. (4) Test script fixed to pass `response_url` in all calls. Requires n8n restart to apply DB changes. |

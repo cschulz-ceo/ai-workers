@@ -1,11 +1,13 @@
 {
+  "id": "cf2282e0-c226-4030-8df4-59ec9fb61a7c",
   "name": "News Article Generator",
+  "active": true,
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "news-search",
-        "responseMode": "lastNode",
+        "responseMode": "responseNode",
         "options": {}
       },
       "id": "node-webhook",
@@ -75,7 +77,8 @@
       "position": [
         860,
         300
-      ]
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -108,7 +111,7 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ model: 'llama3.1:70b', messages: [{ role: 'user', content: 'You are a news analyst. Review these 5 articles and provide a brief 1-sentence summary of each. Format as JSON array with fields: title, source, date, summary, url. Here are the articles: ' + JSON.stringify($json.articles) }], stream: false }) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 300000
         }
       },
       "id": "node-ollama",
@@ -165,6 +168,22 @@
         300
       ],
       "continueOnFail": true
+    },
+    {
+      "id": "a7ec6332-2ba0-48e6-909c-34fb20051580",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        530,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 202,
+        "responseBody": "{\"status\":\"accepted\"}",
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -183,7 +202,7 @@
       "main": [
         [
           {
-            "node": "Ack Slack",
+            "node": "Respond OK",
             "type": "main",
             "index": 0
           }
@@ -244,12 +263,20 @@
           }
         ]
       ]
+    },
+    "Respond OK": {
+      "main": [
+        [
+          {
+            "node": "Ack Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "staticData": null,
-  "active": true,
-  "id": "cf2282e0-c226-4030-8df4-59ec9fb61a7c"
+  }
 }

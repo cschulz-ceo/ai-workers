@@ -127,7 +127,8 @@
       "position": [
         2336,
         -192
-      ]
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -200,7 +201,8 @@
       "position": [
         912,
         64
-      ]
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -243,7 +245,8 @@
       "position": [
         912,
         192
-      ]
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -286,7 +289,8 @@
       "position": [
         912,
         304
-      ]
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -308,7 +312,7 @@
           ]
         },
         "options": {
-          "timeout": 10000
+          "timeout": 30000
         }
       },
       "id": "8487b931-a58a-498a-b13c-27de76b1bf7f",
@@ -318,7 +322,8 @@
       "position": [
         912,
         432
-      ]
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -516,7 +521,8 @@
             }
           ]
         }
-      }
+      },
+      "continueOnFail": true
     },
     {
       "id": "b515558a-64ff-4b4c-8c35-df11186c4cb3",
@@ -587,7 +593,8 @@
         "rawContentType": "application/json",
         "body": "={{ (() => {\n  const resp = $input.first().json;\n  const url = $('Strip HTML').first().json.url;\n  const userId = $('Strip HTML').first().json.userId;\n  let parsed;\n  try { parsed = JSON.parse(resp.message?.content || '{}'); } catch(e) { parsed = {}; }\n  const summary = parsed.summary || resp.message?.content || 'Could not summarize.';\n  const points = (parsed.key_points || []).map(p => '\u2022 ' + p).join('\\n');\n  const MAX = 2500;\n  const text = summary.length > MAX ? summary.slice(0, MAX) + '...' : summary;\n  return JSON.stringify({\n    response_type: 'in_channel',\n    blocks: [\n      { type: 'context', elements: [{ type: 'mrkdwn', text: ':mag: *Scaachi* summarized <' + url + '|this page> for <@' + userId + '>' }] },\n      { type: 'section', text: { type: 'mrkdwn', text: text } },\n      ...(points ? [{ type: 'section', text: { type: 'mrkdwn', text: '*Key Points:*\\n' + points } }] : [])\n    ]\n  });\n})() }}",
         "options": {}
-      }
+      },
+      "continueOnFail": true
     },
     {
       "id": "40e2f2ae-f8d3-48d2-b7ca-194247956a98",
@@ -660,7 +667,8 @@
         "rawContentType": "application/json",
         "body": "={{ (() => {\n  const resp = $input.first().json;\n  const userId = $('Parse Command').first().json.userId;\n  let parsed;\n  try { parsed = JSON.parse(resp.message?.content || '{}'); } catch(e) { parsed = {}; }\n  const verdict = parsed.verdict || 'REVIEWED';\n  const summary = parsed.summary || 'Review complete.';\n  const issues = (parsed.issues || []).slice(0, 5).map(i =>\n    `${i.severity === 'high' ? ':red_circle:' : i.severity === 'medium' ? ':large_yellow_circle:' : ':white_circle:'} ${i.line || i.description || 'Issue'} \u2192 ${i.fix || ''}`\n  ).join('\\n');\n  const strengths = (parsed.strengths || []).map(s => '\u2022 ' + s).join('\\n');\n  const verdictEmoji = verdict === 'LGTM' ? ':white_check_mark:' : verdict === 'CRITICAL' ? ':x:' : ':warning:';\n  return JSON.stringify({\n    response_type: 'in_channel',\n    blocks: [\n      { type: 'context', elements: [{ type: 'mrkdwn', text: ':pencil: *Jason* reviewed code for <@' + userId + '> \u2014 ' + verdictEmoji + ' ' + verdict }] },\n      { type: 'section', text: { type: 'mrkdwn', text: summary } },\n      ...(issues ? [{ type: 'section', text: { type: 'mrkdwn', text: '*Issues:*\\n' + issues } }] : []),\n      ...(strengths ? [{ type: 'section', text: { type: 'mrkdwn', text: '*Strengths:*\\n' + strengths } }] : [])\n    ]\n  });\n})() }}",
         "options": {}
-      }
+      },
+      "continueOnFail": true
     },
     {
       "id": "a0182f9f-a3f5-4110-b042-12c60ce105a9",
