@@ -7,7 +7,7 @@
 #   - Non-Ollama workflows run first (fast, seconds each)
 #   - Ollama-heavy workflows run SEQUENTIALLY with waits between them
 #     (prevents queue buildup and timeouts on the 14B model)
-#   - ComfyUI workflows skipped until models are downloaded
+#   - ComfyUI workflows run as actual inference calls (SDXL, AnimateDiff, ESRGAN)
 #   - Scheduled-only workflows verified as active (not triggered)
 #
 # Usage:
@@ -371,11 +371,36 @@ test_slack_command "/patent" \
   "automated workflow health monitoring system" \
   150
 
-# ── GROUP 4: ComfyUI — skip until model download complete ─────────────────────
-log "--- Group 4: ComfyUI (pending model download) ---"
-mark_skip "/image  (ComfyUI Text to Image)"  "Awaiting FLUX model download"
-mark_skip "/video  (ComfyUI Text to Video)"  "Awaiting FLUX model download"
-mark_skip "/enhance (ComfyUI Image Enhance)" "Awaiting FLUX model download"
+# ── GROUP 4: ComfyUI — models ready, run inference tests ─────────────────────
+log "--- Group 4: ComfyUI (models loaded) ---"
+
+# Give Ollama a longer VRAM cooldown before ComfyUI claims the GPU
+if [[ "$MODE" != "--quick" && "$MODE" != "--dry-run" ]]; then
+  log "Waiting 15s for Ollama VRAM cooldown before ComfyUI tests..."
+  sleep 15
+fi
+
+# /image — SDXL Base 1.0 text-to-image (~60-120s on RTX 5070 Ti)
+test_direct_json_webhook "/image (ComfyUI Text to Image)" \
+  "comfyui-image" \
+  "{\"prompt\":\"a simple red sphere on a white background\",\"channel_id\":\"${TEST_CHANNEL}\",\"user_id\":\"${TEST_USER}\"}" \
+  "comfyui-t2i-001" \
+  240
+
+# /video — AnimateDiff text-to-video (~90-180s)
+test_direct_json_webhook "/video (ComfyUI Text to Video)" \
+  "comfyui-video" \
+  "{\"prompt\":\"a slow zoom toward a red sphere, cinematic\",\"channel_id\":\"${TEST_CHANNEL}\",\"user_id\":\"${TEST_USER}\"}" \
+  "comfyui-t2v-001" \
+  360
+
+# /enhance — Real-ESRGAN 4x upscale (~30-60s)
+# Uses a stable 256×256 public test image
+test_direct_json_webhook "/enhance (ComfyUI Image Enhance)" \
+  "comfyui-enhance" \
+  "{\"image_url\":\"https://picsum.photos/256/256\",\"channel_id\":\"${TEST_CHANNEL}\",\"user_id\":\"${TEST_USER}\"}" \
+  "comfyui-enh-001" \
+  120
 
 # ── GROUP 5: Council — verify active, skip live trigger ──────────────────────
 log "--- Group 5: The Council (active check only) ---"
