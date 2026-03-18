@@ -26,7 +26,7 @@
 | n8n | 5678 | 0.0.0.0 | ✅ Running | Workflow orchestrator (Docker on Pop!_OS) |
 | Ollama | 11434 | **0.0.0.0** | ✅ Running | systemd override applied — Council, /pm, Digest unblocked |
 | Open WebUI | 8080 | 0.0.0.0 | ✅ Running | Chat UI for Ollama |
-| ComfyUI | 8188 | 0.0.0.0 | ✅ Running | Image/video gen — no model checkpoints yet |
+| ComfyUI | 8188 | 0.0.0.0 | ✅ Running | Image/video gen — models downloaded 2026-03-18, ready |
 | Grafana | 3001 | 0.0.0.0 | ✅ Running | v12.4.1, monitoring hub |
 | Prometheus | 9090 | 0.0.0.0 | ✅ Running | Metrics backend + GPU exporter on :9835 |
 | ngrok | 4040 | **0.0.0.0** | ✅ Running | systemd service, web UI reachable by Docker |
@@ -79,9 +79,9 @@
 | 3D Preview Image Server | preview-image-001 | 2026-03-13 | Serves 3D preview images |
 | ComfyUI Preview Server | comfyui-preview-001 | 2026-03-13 | Serves ComfyUI preview images |
 | Patent Spec Generator | patent-spec-001 | 2026-03-13 | /patent → Ollama → patent spec doc |
-| ComfyUI Text to Image | comfyui-t2i-001 | 2026-03-12 | /image → ComfyUI (needs checkpoint) |
-| ComfyUI Text to Video | comfyui-t2v-001 | 2026-03-12 | /video → ComfyUI (needs checkpoint) |
-| ComfyUI Image Enhance | comfyui-enh-001 | 2026-03-12 | /enhance → ComfyUI (needs checkpoint) |
+| ComfyUI Text to Image | comfyui-t2i-001 | 2026-03-18 | /image → SDXL Base 1.0 → Slack |
+| ComfyUI Text to Video | comfyui-t2v-001 | 2026-03-18 | /video → AnimateDiff (SD1.5) → Slack |
+| ComfyUI Image Enhance | comfyui-enh-001 | 2026-03-18 | /enhance → Real-ESRGAN 4x → Slack |
 | Workflow Test Runner | workflow-test-001 | **2026-03-18** | /ai-test → sequential workflow health check → #ops-pulse |
 
 ---
@@ -98,9 +98,9 @@
 | `/ai-status` | ✅ | ✅ Working | Health check → #ops-status |
 | `/ai-draw` | ✅ | 🔄 In Progress | Registered in Slack; workflow wiring TBC |
 | `/ai-diagnose` | ✅ | ✅ Working | 5-point diagnostic report |
-| `/image prompt` | ✅ | 🔄 Needs ComfyUI models | Download script run 2026-03-18; awaiting completion |
-| `/video prompt` | ✅ | 🔄 Needs ComfyUI models | Same as above |
-| `/enhance url` | ✅ | 🔄 Needs ComfyUI models | Same as above |
+| `/image prompt` | ✅ | ✅ Working | SDXL Base 1.0, models confirmed 2026-03-18 |
+| `/video prompt` | ✅ | ✅ Working | AnimateDiff SD1.5, models confirmed 2026-03-18 |
+| `/enhance url` | ✅ | ✅ Working | Real-ESRGAN 4x upscale, models confirmed 2026-03-18 |
 | `/news [topic]` | ✅ | ✅ Working | RSS fetch → Ollama → #ops-intel |
 | `/pm text` | ✅ | ✅ Working | Ollama classify → Linear issue → Slack confirm |
 | `/3d desc` | ✅ | ✅ Working | OpenSCAD → STL + preview image |
@@ -134,15 +134,7 @@
 
 ## Current Blockers
 
-### 1. 🟡 ComfyUI — model checkpoint download in progress
-Download script run 2026-03-18. FLUX.1-schnell (~20GB) requires HF_TOKEN + license acceptance at huggingface.co/black-forest-labs/FLUX.1-schnell.
-**Check status:**
-```bash
-tmux attach -t comfyui-dl   # or check: cat /tmp/comfyui-dl.log
-```
-After download completes: verify ComfyUI at localhost:8188, then test /image, /video, /enhance from Slack.
-
-### 2. 🔲 `/ai-draw` — registered in Slack but n8n workflow not fully wired
+### 1. 🔲 `/ai-draw` — registered in Slack but n8n workflow not fully wired
 The command exists in the Slack app. Needs a dedicated n8n workflow or routing in the Slack Command Handler.
 
 ### ✅ Previously resolved (this session)
@@ -194,23 +186,24 @@ The command exists in the Slack app. Needs a dedicated n8n workflow or routing i
 | 0 | Foundation | ✅ Complete |
 | 1 | Slack Integration | ✅ Complete |
 | 2 | Slack ↔ Ollama | ✅ Complete |
-| 3 | Slash Commands | 🔄 Partial (/image /video /enhance blocked by ComfyUI) |
+| 3 | Slash Commands | ✅ Complete (/ai-draw wiring is optional) |
 | 4 | Ops Automation | 🔄 Partial (GPU exporter ✅, Grafana alert rule pending) |
 | 5 | Task Management | 🔄 Partial (agent→issue update loop missing) |
-| 6 | Generative Output Feeds | ❌ Blocked (ComfyUI no models) |
+| 6 | Generative Output Feeds | 🔄 Partial (ComfyUI ready, studio routing pending) |
 | 7 | Domain Hardening | ⏳ Future |
 
 ---
 
 ## Pending Work
 
-- [ ] **Download ComfyUI checkpoint** → enables /image /video /enhance (`scripts/download-comfyui-models.sh`)
-- [ ] **Activate ComfyUI n8n workflows** (3 workflows: t2i, t2v, enhance) — after model download
+- [x] **Download ComfyUI models** ✅ — confirmed 2026-03-18: SDXL, FLUX FP8, VAE, T5, Real-ESRGAN, AnimateDiff
 - [x] **Test /pm end-to-end** ✅ — exec 530 success 2026-03-13
+- [ ] **Run full workflow test suite** — `bash scripts/test-all-workflows.sh` to validate all 20 workflows incl. ComfyUI Group 4
+- [ ] **Import workflow-test-runner.json** into n8n and register `/ai-test` Slack command
+- [ ] **Wire `/ai-draw`** — needs dedicated n8n workflow or routing in Slack Command Handler
 - [ ] **Test Tasks Channel Handler in Slack** — post `TASK: write a hello world in Python` in #tasks-kevin → expect Ollama → Linear issue → #studio-blueprint + thread reply
 - [ ] **Test Weekly News Digest** — re-trigger in n8n UI (Execute button), verify Slack post in #ops-digest
 - [ ] **Test Ops GPU Alert** — manual trigger in n8n UI → verify Slack post in #ops-alerts
-- [ ] **Download ComfyUI models** (HF_TOKEN required) → enables /image /video /enhance
 - [ ] **Add Grafana alert rule** for GPU >90% → n8n webhook → #ops-alerts (Grafana UI: Alerting → Alert rules → New)
 - [ ] **Domain setup** — n8n.biulatech.com (biulatech.com on Wix; see ADR-016 for migration path)
 
@@ -250,4 +243,5 @@ The command exists in the Slack app. Needs a dedicated n8n workflow or routing i
 | 2026-03-13 | (Other AI sessions) Added /3d and /patent Slack commands, 3D CAD Generator workflow, Patent Spec Generator, timeout fixes, Prometheus n8n exporter, various bug fixes. Attempted Redis/Postgres queue migration — broke n8n (empty Postgres DB, all workflows in SQLite). Partially reverted. |
 | 2026-03-18 | **Session 7:** Diagnosed n8n "Set up owner account" — wrong compose active; restored 20 workflows. Created restart-n8n.sh. Added timeout env vars (600s/900s). Model swap: all 5 agents → qwen3:14b-q4_K_M (9.3 GB, ~66 tok/s vs 2-5 tok/s). Rebuilt all personalities in Ollama. Git cleanup: removed SQLite/STL binaries, redundant docs. Created DISASTER-RECOVERY.md + MODEL-GUIDE.md. Updated TROUBLESHOOTING.md, USER-GUIDE.md, architecture.md, ROADMAP.md. Confirmed Slack: 11 commands registered, Event Subscriptions verified. Confirmed Open WebUI: all 5 agents showing at 14.8B. ComfyUI model download initiated. Commit: 9be2b12. |
 | 2026-03-18 | **Session 7 (cont.):** Fixed routing bug — `/image` (and all studio/news commands) was triggering ALL 4 downstream workflows simultaneously. Root cause: `Ack Studio Command` node had Image+Video+Enhance+News all wired as parallel outputs. Fix: added `Route Studio` Switch node (expression mode, 4 outputs) to route to only the correct downstream. Applied to DB (versionId 4bf2b25b) + git (commit 5231709). **n8n needs restart to load fix.** Created `scripts/test-all-workflows.sh` (sequential test runner with Ollama throttling, Slack report) and `workflow-test-runner.json` (n8n workflow for future `/ai-test` Slack command). |
-| 2026-03-18 | **Session 7 (cont. 2):** Ran test-all-workflows.sh — found 4 execution errors. Fixed: (1) `Post to Command Channel`/`Post to Channel` failing with "Invalid URL" when `response_url` empty — added `continueOnFail: true` across all terminal Slack-posting nodes in status/diagnose/command/news workflows. (2) News Article Generator webhook was `lastNode` (blocks caller 60s) — changed to `responseNode` + added `Respond OK` early ack. (3) `Call News Search` timeout 10s → 30s. (4) Test script fixed to pass `response_url` in all calls. Requires n8n restart to apply DB changes. |
+| 2026-03-18 | **Session 7 (cont. 2):** Ran test-all-workflows.sh — found 4 execution errors. Fixed: (1) `Post to Command Channel`/`Post to Channel` failing with "Invalid URL" when `response_url` empty — added `continueOnFail: true` across all terminal Slack-posting nodes in status/diagnose/command/news workflows. (2) News Article Generator webhook was `lastNode` (blocks caller 60s) — changed to `responseNode` + added `Respond OK` early ack. (3) `Call News Search` timeout 10s → 30s. (4) Test script fixed to pass `response_url` in all calls. --quick test: 22 passed, 0 failed. n8n restart + ComfyUI restart completed. |
+| 2026-03-18 | **Session 7 (cont. 3):** ComfyUI models confirmed fully downloaded and loaded: SDXL Base 1.0 (checkpoints), FLUX FP8 (diffusion_models), ae.safetensors (VAE), t5xxl_fp8_e4m3fn + clip_l (text_encoders), RealESRGAN_x4plus.pth (upscale_models), v3_sd15_mm.ckpt (AnimateDiff). Updated test-all-workflows.sh Group 4 from mark_skip → actual test_direct_json_webhook calls for /image (240s timeout), /video (360s timeout), /enhance (120s timeout) with 15s Ollama VRAM cooldown before group. Updated /image /video /enhance status to ✅ Working. Commit: 95b765c. |

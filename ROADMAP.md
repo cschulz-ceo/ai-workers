@@ -96,9 +96,9 @@ Dedicated handlers for each slash command beyond `/ai`.
 | `/pm [task]` | linear-ai-project-manager | ✅ Ollama classify → Linear issue → Slack confirm |
 | `/3d [desc]` | 3d-cad-generator | ✅ OpenSCAD → STL + preview image |
 | `/patent [desc]` | patent-spec-generator | ✅ Ollama → patent spec document |
-| `/image [prompt]` | comfyui-text-to-image | 🔄 ComfyUI models downloading |
-| `/video [prompt]` | comfyui-text-to-video | 🔄 ComfyUI models downloading |
-| `/enhance [url]` | comfyui-image-enhance | 🔄 ComfyUI models downloading |
+| `/image [prompt]` | comfyui-text-to-image | ✅ Models loaded (SDXL Base 1.0) |
+| `/video [prompt]` | comfyui-text-to-video | ✅ Models loaded (AnimateDiff SD1.5) |
+| `/enhance [url]` | comfyui-image-enhance | ✅ Models loaded (Real-ESRGAN 4x) |
 
 ### `/ai-status` implementation plan
 1. Webhook → ack immediately
@@ -210,4 +210,4 @@ Move from ngrok free tier to proper domain.
 | 2026-03-11 | Fixed events receiver IF node bug (Code+Switch routing), @ai-workers mentions now route to correct personality and reply in thread, /ai-diagnose workflow built, ops-daily-digest workflow built |
 | 2026-03-12 | Council deliberation engine (sequential, thread-aware), Grafana dashboard, Weekly News Digest, Linear AI PM, /pm command, systemd overrides (Ollama, ngrok, GPU exporter) |
 | 2026-03-13 | /3d and /patent commands, 3D CAD Generator, Patent Spec Generator, timeout fixes, Prometheus n8n exporter |
-| 2026-03-18 | Model swap: all 5 agents → Qwen3 14B Q4_K_M (9.3 GB, ~66 tok/s vs 2-5 tok/s). n8n restored from wrong compose; restart-n8n.sh created. Git cleanup (removed SQLite/STL binaries, redundant docs). Created DISASTER-RECOVERY.md + MODEL-GUIDE.md. Updated TROUBLESHOOTING.md, USER-GUIDE.md, architecture.md, ROADMAP.md, SESSION_CONTEXT.md. Confirmed: all 11 Slack commands registered, Event Subscriptions verified, Open WebUI showing all 5 agents at 14.8B. ComfyUI model download initiated. |
+| 2026-03-18 | Model swap: all 5 agents → Qwen3 14B Q4_K_M (9.3 GB, ~66 tok/s vs 2-5 tok/s). n8n restored from wrong compose; restart-n8n.sh created. Git cleanup (removed SQLite/STL binaries, redundant docs). Created DISASTER-RECOVERY.md + MODEL-GUIDE.md. Updated TROUBLESHOOTING.md, USER-GUIDE.md, architecture.md, ROADMAP.md, SESSION_CONTEXT.md. Confirmed: all 11 Slack commands registered, Event Subscriptions verified, Open WebUI showing all 5 agents at 14.8B. ComfyUI models fully downloaded and confirmed. Fixed /image routing bug (Route Studio switch node). Built test-all-workflows.sh with Ollama throttling + Slack report. Quick test: 22/22 pass. ComfyUI Group 4 tests now active. |
