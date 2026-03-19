@@ -704,50 +704,20 @@
     {
       "id": "3355c021-85f1-42a9-81ee-8bcfbe2d2897",
       "name": "Call Test Workflow",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
       "position": [
         1260,
         1400
       ],
       "parameters": {
-        "method": "POST",
-        "url": "http://localhost:5678/webhook/workflow-tests",
-        "sendBody": true,
-        "contentType": "form-urlencoded",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "command",
-              "value": "/ai-test"
-            },
-            {
-              "name": "text",
-              "value": "={{ $json.mode }}"
-            },
-            {
-              "name": "channel_id",
-              "value": "={{ $json.channelId }}"
-            },
-            {
-              "name": "user_id",
-              "value": "={{ $json.userId }}"
-            },
-            {
-              "name": "user_name",
-              "value": "={{ $json.userName }}"
-            },
-            {
-              "name": "response_url",
-              "value": "={{ $json.responseUrl }}"
-            }
-          ]
-        },
+        "source": "database",
+        "workflowId": "workflow-test-001",
+        "mode": "once",
         "options": {
-          "timeout": 15000
+          "waitForSubWorkflow": false
         }
       },
-      "onError": "continueRegularOutput",
       "continueOnFail": true
     }
   ],
