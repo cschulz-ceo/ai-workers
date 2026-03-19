@@ -80,7 +80,7 @@
 | ComfyUI Preview Server | comfyui-preview-001 | 2026-03-13 | Serves ComfyUI preview images |
 | Patent Spec Generator | patent-spec-001 | 2026-03-13 | /patent → Ollama → patent spec doc |
 | ComfyUI Text to Image | comfyui-t2i-001 | 2026-03-18 | /image → SDXL Base 1.0 → Slack |
-| ComfyUI Text to Video | comfyui-t2v-001 | 2026-03-18 | /video → AnimateDiff (SD1.5) → Slack |
+| ComfyUI Text to Video | comfyui-t2v-001 | **2026-03-19** | /video → AnimateDiff v3 SD1.5 → 16-frame MP4 → Slack upload |
 | ComfyUI Image Enhance | comfyui-enh-001 | 2026-03-18 | /enhance → Real-ESRGAN 4x → Slack |
 | Workflow Test Runner | workflow-test-001 | **2026-03-18** | /ai-test → sequential workflow health check → #ops-pulse |
 
@@ -100,7 +100,7 @@
 | `/ai-draw` | ✅ | 🔄 In Progress | Registered in Slack; workflow wiring TBC |
 | `/ai-diagnose` | ✅ | ✅ Working | 5-point diagnostic report |
 | `/image prompt` | ✅ | ✅ Working | SDXL Base 1.0, models confirmed 2026-03-18 |
-| `/video prompt` | ✅ | ✅ Working | AnimateDiff SD1.5, models confirmed 2026-03-18 |
+| `/video prompt` | ✅ | 🔄 Needs SD1.5 ckpt | AnimateDiff v3 → 16-frame H264 MP4. **Requires:** `v1-5-pruned-emaonly.safetensors` download (~4.27 GB). Run: `bash scripts/download-sd15-checkpoint.sh` then restart ComfyUI + n8n |
 | `/enhance url` | ✅ | ✅ Working | Real-ESRGAN 4x upscale, models confirmed 2026-03-18 |
 | `/news [topic]` | ✅ | ✅ Working | RSS fetch → Ollama → #ops-intel |
 | `/pm text` | ✅ | ✅ Working | Ollama classify → Linear issue → Slack confirm |
@@ -202,6 +202,7 @@ The command exists in the Slack app. Needs a dedicated n8n workflow or routing i
 - [x] **Run full workflow test suite** ✅ — 27 passed, 0 failed, 3 warnings (all timeout calibration — fixed). Timeouts bumped: /3d→360s, /patent→360s, /image→720s. Drain logic added to prevent cascading Ollama collisions. Commits 95b765c, 6f54ab7.
 - [x] **Import workflow-test-runner.json** ✅ — inserted into n8n DB (id: workflow-test-001, webhook: /webhook/workflow-tests). **Requires n8n restart to activate webhook.** Run: `bash ~/n8n/restart-n8n.sh`
 - [x] **Register `/ai-test` Slack command** ✅ — registered in Slack, routed through `/webhook/slack-command` → Command Handler → executeWorkflow → Workflow Test Runner (workflow-test-001)
+- [ ] **Download SD1.5 checkpoint for AnimateDiff** — run `bash scripts/download-sd15-checkpoint.sh` (~4.27 GB), then restart ComfyUI (`docker restart comfyui`) + n8n (`bash ~/n8n/restart-n8n.sh`)
 - [ ] **Wire `/ai-draw`** — needs dedicated n8n workflow or routing in Slack Command Handler
 - [ ] **Test Tasks Channel Handler in Slack** — post `TASK: write a hello world in Python` in #tasks-kevin → expect Ollama → Linear issue → #studio-blueprint + thread reply
 - [ ] **Test Weekly News Digest** — re-trigger in n8n UI (Execute button), verify Slack post in #ops-digest
@@ -248,3 +249,4 @@ The command exists in the Slack app. Needs a dedicated n8n workflow or routing i
 | 2026-03-18 | **Session 7 (cont. 2):** Ran test-all-workflows.sh — found 4 execution errors. Fixed: (1) `Post to Command Channel`/`Post to Channel` failing with "Invalid URL" when `response_url` empty — added `continueOnFail: true` across all terminal Slack-posting nodes in status/diagnose/command/news workflows. (2) News Article Generator webhook was `lastNode` (blocks caller 60s) — changed to `responseNode` + added `Respond OK` early ack. (3) `Call News Search` timeout 10s → 30s. (4) Test script fixed to pass `response_url` in all calls. --quick test: 22 passed, 0 failed. n8n restart + ComfyUI restart completed. |
 | 2026-03-18 | **Session 7 (cont. 3):** ComfyUI models confirmed fully downloaded and loaded: SDXL Base 1.0 (checkpoints), FLUX FP8 (diffusion_models), ae.safetensors (VAE), t5xxl_fp8_e4m3fn + clip_l (text_encoders), RealESRGAN_x4plus.pth (upscale_models), v3_sd15_mm.ckpt (AnimateDiff). Updated test-all-workflows.sh Group 4 from mark_skip → actual test_direct_json_webhook calls for /image (240s timeout), /video (360s timeout), /enhance (120s timeout) with 15s Ollama VRAM cooldown before group. Updated /image /video /enhance status to ✅ Working. Commit: 95b765c. |
 | 2026-03-19 | **Session 8:** Ran full test suite → 27 passed, 0 failed, 3 warnings (all timeout calibration). Warnings: /3d completed in 261s (was 150s timeout → cascading /patent error), /image completed in 549s (was 240s timeout). Fixed: timeouts /3d→360s, /patent→360s, /image→720s. Added drain loop to test functions to prevent cascading GPU collisions. Commit: 6f54ab7. Imported workflow-test-runner.json into n8n DB (workflow-test-001, webhook /webhook/workflow-tests). Fixed API key: `grafana-monitoring` key had audience='public' → updated to 'public-api'; N8N_API_KEY in .env correctly maps to this key via SHA256. Both changes require n8n restart to activate. |
+| 2026-03-19 | **Session 8 (cont.):** Investigated user-reported routing issues + video quality. (1) **Routing confirmed fixed:** live test of `/image` only triggered comfyui-t2i-001 (no simultaneous Video/Enhance). Historical simultaneous triggers were all from before Route Studio fix was loaded. (2) **Video GIF issue diagnosed:** `Build ComfyUI Payload` was NOT using AnimateDiff — just SDXL batch_size=4 → 3fps GIF. Rebuilt workflow with proper AnimateDiff v3 SD1.5 pipeline: CheckpointLoaderSimple → ADE_AnimateDiffLoaderGen1 (v3_sd15_mm.ckpt) → KSampler (16 frames) → VHS_VideoCombine (H264 MP4). Also fixed Enhance Prompt model (llama3.1:70b → qwen3:14b-q4_K_M), added qwen3 think-tag stripping, updated Upload to Slack to use files.upload for MP4 (Slack image blocks can't play video). Created `scripts/download-sd15-checkpoint.sh` for v1-5-pruned-emaonly.safetensors (~4.27 GB). **Requires:** SD1.5 checkpoint download + ComfyUI restart + n8n restart. |
