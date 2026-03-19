@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body;\nconst command = (body.command || '/ai').toLowerCase();\nconst rawText = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst responseUrl = body.response_url || '';\n\n// \u2500\u2500 Slash command routing \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// /image <prompt>    \u2192 ComfyUI text-to-image \u2192 #studio-canvas\n// /video <prompt>    \u2192 ComfyUI text-to-video \u2192 #studio-reels\n// /enhance <url>     \u2192 ComfyUI image enhance\n// /news [topic]      \u2192 News article search\n// /3d <description>  \u2192 OpenSCAD 3D model generation\n// /patent <idea>     \u2192 AI patent specification writer\n// /ai [agent:] text  \u2192 Council member or direct Ollama\n// /summarize <url>   \u2192 Summarize a URL\n// /review <code>     \u2192 Jason code review\n\nif (command === '/image' || rawText.toLowerCase().startsWith('image:')) {\n  const prompt = command === '/image' ? rawText : rawText.replace(/^image:/i,'').trim();\n  return [{ json: {\n    route: 'studio_image',\n    prompt,\n    channelId: 'C0AKW7W9ZPX', // #studio-canvas\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/video' || rawText.toLowerCase().startsWith('video:')) {\n  const prompt = command === '/video' ? rawText : rawText.replace(/^video:/i,'').trim();\n  return [{ json: {\n    route: 'studio_video',\n    prompt,\n    channelId: 'C0AKJ788GJK', // #studio-reels\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/enhance' || rawText.toLowerCase().startsWith('enhance:')) {\n  const imageUrl = command === '/enhance' ? rawText : rawText.replace(/^enhance:/i,'').trim();\n  return [{ json: {\n    route: 'studio_enhance',\n    imageUrl,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/news' || rawText.toLowerCase().startsWith('news:')) {\n  const query = command === '/news'\n    ? (rawText || 'AI agents automation')\n    : rawText.replace(/^news:/i,'').trim();\n  return [{ json: {\n    route: 'news',\n    query,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/3d' || rawText.toLowerCase().startsWith('3d:')) {\n  const description = command === '/3d' ? rawText : rawText.replace(/^3d:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'cad_3d',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/patent' || rawText.toLowerCase().startsWith('patent:')) {\n  const description = command === '/patent' ? rawText : rawText.replace(/^patent:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'patent',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\n\nif (command === '/summarize') {\n  const url = rawText.trim();\n  if (!url || !url.startsWith('http')) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'summarize',\n    url,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/review') {\n  const code = rawText.trim();\n  if (!code) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'review',\n    code,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/pm' || rawText.toLowerCase().startsWith('pm:')) {\n  const message = command === '/pm' ? rawText : rawText.replace(/^pm:/i,'').trim();\n  if (!message) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'pm',\n    text: message,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\n// Default: /ai with optional agent prefix (kevin:, jason:, etc.)\nconst AGENTS = ['kevin','jason','scaachi','christian','chidi'];\nconst MODEL_MAP = {\n  kevin: 'kevin:latest', jason: 'jason:latest', scaachi: 'scaachi:latest',\n  christian: 'christian:latest', chidi: 'chidi:latest'\n};\n\nlet agent = 'kevin';\nlet userText = rawText;\n\nfor (const a of AGENTS) {\n  if (rawText.toLowerCase().startsWith(a + ':')) {\n    agent = a;\n    userText = rawText.slice(a.length + 1).trim();\n    break;\n  }\n}\n\nif (!userText) {\n  return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n}\n\nreturn [{ json: {\n  route: 'ai',\n  agent,\n  model: MODEL_MAP[agent],\n  userText,\n  channelId, userId, userName, responseUrl\n}}];"
+        "jsCode": "const body = $input.first().json.body;\nconst command = (body.command || '/ai').toLowerCase();\nconst rawText = (body.text || '').trim();\nconst userId = body.user_id || '';\nconst userName = body.user_name || 'unknown';\nconst channelId = body.channel_id || '';\nconst responseUrl = body.response_url || '';\n\n// \u2500\u2500 Slash command routing \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// /image <prompt>    \u2192 ComfyUI text-to-image \u2192 #studio-canvas\n// /video <prompt>    \u2192 ComfyUI text-to-video \u2192 #studio-reels\n// /enhance <url>     \u2192 ComfyUI image enhance\n// /news [topic]      \u2192 News article search\n// /3d <description>  \u2192 OpenSCAD 3D model generation\n// /patent <idea>     \u2192 AI patent specification writer\n// /ai [agent:] text  \u2192 Council member or direct Ollama\n// /summarize <url>   \u2192 Summarize a URL\n// /review <code>     \u2192 Jason code review\n\nif (command === '/image' || rawText.toLowerCase().startsWith('image:')) {\n  const prompt = command === '/image' ? rawText : rawText.replace(/^image:/i,'').trim();\n  return [{ json: {\n    route: 'studio_image',\n    prompt,\n    channelId: 'C0AKW7W9ZPX', // #studio-canvas\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/video' || rawText.toLowerCase().startsWith('video:')) {\n  const prompt = command === '/video' ? rawText : rawText.replace(/^video:/i,'').trim();\n  return [{ json: {\n    route: 'studio_video',\n    prompt,\n    channelId: 'C0AKJ788GJK', // #studio-reels\n    sourceChannel: channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/enhance' || rawText.toLowerCase().startsWith('enhance:')) {\n  const imageUrl = command === '/enhance' ? rawText : rawText.replace(/^enhance:/i,'').trim();\n  return [{ json: {\n    route: 'studio_enhance',\n    imageUrl,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/news' || rawText.toLowerCase().startsWith('news:')) {\n  const query = command === '/news'\n    ? (rawText || 'AI agents automation')\n    : rawText.replace(/^news:/i,'').trim();\n  return [{ json: {\n    route: 'news',\n    query,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/3d' || rawText.toLowerCase().startsWith('3d:')) {\n  const description = command === '/3d' ? rawText : rawText.replace(/^3d:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'cad_3d',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/patent' || rawText.toLowerCase().startsWith('patent:')) {\n  const description = command === '/patent' ? rawText : rawText.replace(/^patent:/i,'').trim();\n  if (!description) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'patent',\n    description,\n    channelId,\n    userId, userName, responseUrl\n  }}];\n}\n\n\nif (command === '/summarize') {\n  const url = rawText.trim();\n  if (!url || !url.startsWith('http')) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'summarize',\n    url,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/review') {\n  const code = rawText.trim();\n  if (!code) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'review',\n    code,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\nif (command === '/pm' || rawText.toLowerCase().startsWith('pm:')) {\n  const message = command === '/pm' ? rawText : rawText.replace(/^pm:/i,'').trim();\n  if (!message) {\n    return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n  }\n  return [{ json: {\n    route: 'pm',\n    text: message,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\n\nif (command === '/ai-test') {\n  const mode = rawText.trim() || 'full';\n  return [{ json: {\n    route: 'test',\n    mode,\n    channelId, userId, userName, responseUrl\n  }}];\n}\n\n// Default: /ai with optional agent prefix (kevin:, jason:, etc.)\nconst AGENTS = ['kevin','jason','scaachi','christian','chidi'];\nconst MODEL_MAP = {\n  kevin: 'kevin:latest', jason: 'jason:latest', scaachi: 'scaachi:latest',\n  christian: 'christian:latest', chidi: 'chidi:latest'\n};\n\nlet agent = 'kevin';\nlet userText = rawText;\n\nfor (const a of AGENTS) {\n  if (rawText.toLowerCase().startsWith(a + ':')) {\n    agent = a;\n    userText = rawText.slice(a.length + 1).trim();\n    break;\n  }\n}\n\nif (!userText) {\n  return [{ json: { route: 'help', channelId, userId, userName, responseUrl }}];\n}\n\nreturn [{ json: {\n  route: 'ai',\n  agent,\n  model: MODEL_MAP[agent],\n  userText,\n  channelId, userId, userName, responseUrl\n}}];"
       },
       "id": "42b62529-d7b9-48be-917c-e1a4958bb103",
       "name": "Parse Command",
@@ -133,8 +133,8 @@
     {
       "parameters": {
         "mode": "expression",
-        "output": "={{ $json.route === 'ai' ? 0 : $json.route === 'studio_image' ? 1 : $json.route === 'studio_video' ? 2 : $json.route === 'studio_enhance' ? 3 : $json.route === 'news' ? 4 : $json.route === 'pm' ? 6 : $json.route === 'cad_3d' ? 7 : $json.route === 'patent' ? 8 : $json.route === 'summarize' ? 9 : $json.route === 'review' ? 10 : 5 }}",
-        "numberOutputs": 11
+        "output": "={{ $json.route === 'ai' ? 0 : $json.route === 'studio_image' ? 1 : $json.route === 'studio_video' ? 2 : $json.route === 'studio_enhance' ? 3 : $json.route === 'news' ? 4 : $json.route === 'pm' ? 6 : $json.route === 'cad_3d' ? 7 : $json.route === 'patent' ? 8 : $json.route === 'summarize' ? 9 : $json.route === 'review' ? 10 : $json.route === 'test' ? 11 : 5 }}",
+        "numberOutputs": 12
       },
       "id": "98e37f86-6b8a-4c6d-b7cf-89543ea04149",
       "name": "Route Command",
@@ -684,6 +684,71 @@
         "output": "={{ $json.route === 'studio_image' ? 0 : $json.route === 'studio_video' ? 1 : $json.route === 'studio_enhance' ? 2 : 3 }}",
         "numberOutputs": 4
       }
+    },
+    {
+      "id": "bdcaab19-dca1-433e-8e00-92541cae5bff",
+      "name": "Ack Test Command",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        1400
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':test_tube: Running workflow tests (' + $json.mode + ' mode)...' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "3355c021-85f1-42a9-81ee-8bcfbe2d2897",
+      "name": "Call Test Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1260,
+        1400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/workflow-tests",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "/ai-test"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.mode }}"
+            },
+            {
+              "name": "channel_id",
+              "value": "={{ $json.channelId }}"
+            },
+            {
+              "name": "user_id",
+              "value": "={{ $json.userId }}"
+            },
+            {
+              "name": "user_name",
+              "value": "={{ $json.userName }}"
+            },
+            {
+              "name": "response_url",
+              "value": "={{ $json.responseUrl }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -817,6 +882,13 @@
         [
           {
             "node": "Ack Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ack Test Command",
             "type": "main",
             "index": 0
           }
@@ -959,6 +1031,17 @@
         [
           {
             "node": "Call News Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ack Test Command": {
+      "main": [
+        [
+          {
+            "node": "Call Test Workflow",
             "type": "main",
             "index": 0
           }
