@@ -117,10 +117,20 @@
         "method": "POST",
         "url": "http://host.docker.internal:8188/prompt",
         "sendBody": true,
-        "contentType": "json",
+        "contentType": "raw",
         "body": "={{ JSON.stringify({ prompt: $json.workflow, client_id: $json.clientId }) }}",
         "options": {
           "timeout": 600000
+        },
+        "rawContentType": "application/json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
         }
       }
     },
