@@ -101,7 +101,7 @@
         420
       ],
       "parameters": {
-        "jsCode": "const raw = $('Webhook').first().json.body || {};\nconst enhanced = $input.first().json.message?.content || raw.prompt || 'a beautiful landscape';\nconst channelId = raw.channel || raw.channel_id || 'C0AKW7W9ZPX';\nconst userId    = raw.user_id || raw.user || '';\nconst clientId  = 'n8n-img-' + Date.now();\nconst seed = Math.floor(Math.random() * 1_000_000_000);\n\n// SDXL Base 1.0 workflow (1024x1024, dpmpp_2m karras, 25 steps)\nconst workflow = {\n  \"1\": { \"inputs\": {\"ckpt_name\": \"sd_xl_base_1.0.safetensors\"}, \"class_type\": \"CheckpointLoaderSimple\" },\n  \"2\": { \"inputs\": {\"text\": enhanced, \"clip\": [\"1\",1]}, \"class_type\": \"CLIPTextEncode\" },\n  \"3\": { \"inputs\": {\"text\": \"blurry, low quality, distorted, watermark, ugly, deformed, amateur, duplicate, sketch\", \"clip\": [\"1\",1]}, \"class_type\": \"CLIPTextEncode\" },\n  \"4\": { \"inputs\": {\"width\": 1024, \"height\": 1024, \"batch_size\": 1}, \"class_type\": \"EmptyLatentImage\" },\n  \"5\": {\n    \"inputs\": {\n      \"seed\": seed, \"steps\": 25, \"cfg\": 7.0,\n      \"sampler_name\": \"dpmpp_2m\", \"scheduler\": \"karras\", \"denoise\": 1.0,\n      \"model\": [\"1\",0], \"positive\": [\"2\",0], \"negative\": [\"3\",0], \"latent_image\": [\"4\",0]\n    },\n    \"class_type\": \"KSampler\"\n  },\n  \"6\": { \"inputs\": {\"samples\": [\"5\",0], \"vae\": [\"1\",2]}, \"class_type\": \"VAEDecode\" },\n  \"7\": { \"inputs\": {\"filename_prefix\": \"n8n_sdxl\", \"images\": [\"6\",0]}, \"class_type\": \"SaveImage\" }\n};\n\nreturn [{ json: { workflow, clientId, channelId, userId, prompt: enhanced } }];\n"
+        "jsCode": "const raw = $('Webhook').first().json.body || {};\nconst originalPrompt = (raw.prompt || raw.text || '').trim();\nconst enhanced = $input.first().json.message?.content || originalPrompt || 'a beautiful landscape';\nconst channelId = raw.channel || raw.channel_id || 'C0AKW7W9ZPX';\nconst userId    = raw.user_id || raw.user || '';\nconst clientId  = 'n8n-img-' + Date.now();\nconst seed = Math.floor(Math.random() * 1_000_000_000);\n\n// SDXL Base 1.0 workflow (1024x1024, dpmpp_2m karras, 25 steps)\nconst workflow = {\n  \"1\": { \"inputs\": {\"ckpt_name\": \"sd_xl_base_1.0.safetensors\"}, \"class_type\": \"CheckpointLoaderSimple\" },\n  \"2\": { \"inputs\": {\"text\": enhanced, \"clip\": [\"1\",1]}, \"class_type\": \"CLIPTextEncode\" },\n  \"3\": { \"inputs\": {\"text\": \"blurry, low quality, distorted, watermark, ugly, deformed, amateur, duplicate, sketch\", \"clip\": [\"1\",1]}, \"class_type\": \"CLIPTextEncode\" },\n  \"4\": { \"inputs\": {\"width\": 1024, \"height\": 1024, \"batch_size\": 1}, \"class_type\": \"EmptyLatentImage\" },\n  \"5\": {\n    \"inputs\": {\n      \"seed\": seed, \"steps\": 25, \"cfg\": 7.0,\n      \"sampler_name\": \"dpmpp_2m\", \"scheduler\": \"karras\", \"denoise\": 1.0,\n      \"model\": [\"1\",0], \"positive\": [\"2\",0], \"negative\": [\"3\",0], \"latent_image\": [\"4\",0]\n    },\n    \"class_type\": \"KSampler\"\n  },\n  \"6\": { \"inputs\": {\"samples\": [\"5\",0], \"vae\": [\"1\",2]}, \"class_type\": \"VAEDecode\" },\n  \"7\": { \"inputs\": {\"filename_prefix\": \"n8n_sdxl\", \"images\": [\"6\",0]}, \"class_type\": \"SaveImage\" }\n};\n\n// Store original prompt for Slack display; enhanced is used for generation only\nreturn [{ json: { workflow, clientId, channelId, userId, prompt: originalPrompt } }];\n"
       }
     },
     {
@@ -117,11 +117,12 @@
         "method": "POST",
         "url": "http://host.docker.internal:8188/prompt",
         "sendBody": true,
-        "contentType": "json",
+        "contentType": "raw",
         "body": "={{ JSON.stringify({ prompt: $json.workflow, client_id: $json.clientId }) }}",
         "options": {
           "timeout": 600000
-        }
+        },
+        "rawContentType": "application/json"
       }
     },
     {
