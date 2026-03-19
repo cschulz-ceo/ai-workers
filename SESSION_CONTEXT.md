@@ -90,12 +90,13 @@
 
 **Event Subscriptions:** ✅ Verified — `https://appendicular-wilson-looser.ngrok-free.dev/webhook/slack-events`
 
-### Slash Commands (11 registered in Slack app)
+### Slash Commands (12 registered in Slack app)
 
 | Command | Registered in Slack | n8n Workflow Status | Notes |
 |---------|--------------------|--------------------|-------|
 | `/ai [agent:] text` | ✅ | ✅ Working | Routes to Ollama personality by prefix or channel |
 | `/ai-status` | ✅ | ✅ Working | Health check → #ops-status |
+| `/ai-test [--quick]` | ✅ | ✅ Routed | Routes through Command Handler → executeWorkflow → Workflow Test Runner |
 | `/ai-draw` | ✅ | 🔄 In Progress | Registered in Slack; workflow wiring TBC |
 | `/ai-diagnose` | ✅ | ✅ Working | 5-point diagnostic report |
 | `/image prompt` | ✅ | ✅ Working | SDXL Base 1.0, models confirmed 2026-03-18 |
@@ -200,7 +201,7 @@ The command exists in the Slack app. Needs a dedicated n8n workflow or routing i
 - [x] **Test /pm end-to-end** ✅ — exec 530 success 2026-03-13
 - [x] **Run full workflow test suite** ✅ — 27 passed, 0 failed, 3 warnings (all timeout calibration — fixed). Timeouts bumped: /3d→360s, /patent→360s, /image→720s. Drain logic added to prevent cascading Ollama collisions. Commits 95b765c, 6f54ab7.
 - [x] **Import workflow-test-runner.json** ✅ — inserted into n8n DB (id: workflow-test-001, webhook: /webhook/workflow-tests). **Requires n8n restart to activate webhook.** Run: `bash ~/n8n/restart-n8n.sh`
-- [ ] **Register `/ai-test` Slack command** — after n8n restart, add slash command in Slack app pointing to `https://appendicular-wilson-looser.ngrok-free.dev/webhook/workflow-tests`
+- [x] **Register `/ai-test` Slack command** ✅ — registered in Slack, routed through `/webhook/slack-command` → Command Handler → executeWorkflow → Workflow Test Runner (workflow-test-001)
 - [ ] **Wire `/ai-draw`** — needs dedicated n8n workflow or routing in Slack Command Handler
 - [ ] **Test Tasks Channel Handler in Slack** — post `TASK: write a hello world in Python` in #tasks-kevin → expect Ollama → Linear issue → #studio-blueprint + thread reply
 - [ ] **Test Weekly News Digest** — re-trigger in n8n UI (Execute button), verify Slack post in #ops-digest
