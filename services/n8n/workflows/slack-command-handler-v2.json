@@ -386,7 +386,7 @@
     },
     {
       "parameters": {
-        "respondWith": "text",
+        "respondWith": "json",
         "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: $json.jobId ? ':triangular_ruler: *Improving 3D model* `' + $json.jobId + '` \\u2014 ' + $json.description : ':triangular_ruler: *Generating 3D model* for: _' + $json.description + '_\\nResults will appear in this channel shortly.' }) }}"
       },
       "id": "75bdd472-652d-4472-a42c-50a8923db386",
@@ -430,7 +430,7 @@
     },
     {
       "parameters": {
-        "respondWith": "text",
+        "respondWith": "json",
         "responseBody": "={{ JSON.stringify({ response_type: 'ephemeral', text: ':page_with_curl: *Generating patent specification* for: _' + $json.description + '_\\nThis may take 1-2 minutes. Results will appear in this channel.' }) }}"
       },
       "id": "a1afb0cf-678c-4910-b5b8-7bdf86771bcf",
