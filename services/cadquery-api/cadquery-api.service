@@ -1,0 +1,20 @@
+[Unit]
+Description=CadQuery Generate API — AI-powered 3D model generation with self-correction
+After=network.target
+
+[Service]
+Type=simple
+User=biulatech
+Group=biulatech
+ExecStart=/usr/bin/python3 /home/biulatech/ai-workers-1/services/cadquery-api/server.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cadquery-api
+Environment=PORT=8190
+Environment=OLLAMA_URL=http://127.0.0.1:11434/api/chat
+Environment=CADQUERY_MODEL=qwen2.5-coder:32b-instruct-q5_K_M
+
+[Install]
+WantedBy=multi-user.target

@@ -22,12 +22,12 @@
     },
     {
       "parameters": {
-        "jsCode": "const fs = require('fs');\nconst body = $input.first().json.body || $input.first().json;\nconst description = (body.description || '').trim();\nconst channelId   = body.channelId || '';\nconst userId      = body.userId || '';\nconst userName    = body.userName || 'user';\n// Sanitize jobId: only 8 lowercase hex chars\nconst jobId      = (body.jobId || '').toString().replace(/[^a-f0-9]/gi, '').slice(0, 8).toLowerCase();\nconst inlineCode = (body.inlineCode || '').trim();\n\nconst BASE_SYSTEM = `You are an expert OpenSCAD programmer who creates parametric 3D-printable models.\n\nOUTPUT RULES \\u2014 follow exactly:\n1. Output ONLY valid OpenSCAD code. Absolutely no markdown, no explanations, no extra text.\n2. Declare all dimensions as named variables at the top (in mm).\n3. Add brief inline comments on each major section.\n4. The model MUST be genuinely 3D \\u2014 it must have real volume in X, Y, and Z.\n5. Center the finished model at the origin.\n\nMANDATORY 3D REQUIREMENTS:\n- NEVER produce a flat 2D shape as the final output.\n- Solid primitives: cube(), sphere(), cylinder() \\u2014 always in proper 3D context.\n- For extruded cross-sections (e.g. brackets, rails): use linear_extrude(height=H) on a 2D polygon/square/circle.\n- For rotational parts (gears, rings, wheels, pulleys): use rotate_extrude() around the Z axis on a 2D profile drawn in the XY plane.\n- Minimum feature height: 5 mm unless the user specifies otherwise.\n- Use difference() for subtractive geometry (holes, cutouts), union() for additive joins.\n- $fn \\u2265 64 for all circles and cylinders.\n\nQUALITY:\n- The model must be manifold/watertight (no self-intersections).\n- Design for printability: avoid unsupported overhangs > 45\\u00b0 unless support is described.\n- All variables at the top; no magic numbers buried in geometry.`;\n\nlet systemPrompt, userMessage;\n\nif (jobId) {\n  const scadPath = `/home/node/ai-output/3d/${jobId}/model.scad`;\n  let existingCode = '';\n  try { existingCode = fs.readFileSync(scadPath, 'utf8'); } catch(e) {}\n\n  if (existingCode) {\n    systemPrompt = BASE_SYSTEM + `\\n\\nIMPROVEMENT MODE:\\nApply ONLY the requested improvements while preserving the overall structure and variable naming.\\nReturn the complete updated OpenSCAD code (not just the changed sections).`;\n    userMessage = `Improve this OpenSCAD model with: ${description}\\n\\nEXISTING CODE (job ${jobId}):\\n${existingCode}`;\n  } else {\n    // jobId provided but file not found \\u2014 fall back to new generation\n    systemPrompt = BASE_SYSTEM;\n    userMessage = `Generate OpenSCAD code for: ${description}`;\n  }\n} else if (inlineCode) {\n  systemPrompt = BASE_SYSTEM + `\\n\\nIMPROVEMENT MODE:\\nApply ONLY the requested improvements while preserving the overall structure and variable naming.\\nReturn the complete updated OpenSCAD code (not just the changed sections).`;\n  userMessage = `Improve this OpenSCAD model with: ${description}\\n\\nEXISTING CODE:\\n${inlineCode}`;\n} else {\n  systemPrompt = BASE_SYSTEM;\n  userMessage = `Generate OpenSCAD code for: ${description}`;\n}\n\nreturn [{ json: { description, channelId, userId, userName, systemPrompt, userMessage, jobId } }];"
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst description = (body.description || '').trim();\nconst channelId   = body.channelId || '';\nconst userId      = body.userId || '';\nconst userName    = body.userName || 'user';\n// Sanitize jobId: only 8 lowercase hex chars\nconst jobId      = (body.jobId || '').toString().replace(/[^a-f0-9]/gi, '').slice(0, 8).toLowerCase();\nconst inlineCode = (body.inlineCode || '').trim();\n\nif (!description) {\n  throw new Error('description is required');\n}\n\nreturn [{ json: { description, channelId, userId, userName, jobId, inlineCode } }];\n"
       },
       "id": "cad-parse-01",
-      "name": "Build Prompt",
+      "name": "Build Payload",
       "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [
         420,
         300
@@ -36,7 +36,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://host.docker.internal:11434/api/chat",
+        "url": "http://host.docker.internal:8190/generate",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -49,13 +49,13 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ model: 'qwen2.5-coder:32b-instruct-q5_K_M', messages: [{ role: 'system', content: $json.systemPrompt }, { role: 'user', content: $json.userMessage }], stream: false, options: { temperature: 0.2, num_predict: 4096 } }) }}",
+        "body": "={{ JSON.stringify({ description: $json.description, channelId: $json.channelId, userId: $json.userId, userName: $json.userName, jobId: $json.jobId || null, inlineCode: $json.inlineCode || null }) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 1800000
         }
       },
       "id": "cad-ollama-01",
-      "name": "Generate OpenSCAD",
+      "name": "Generate 3D",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -65,50 +65,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// $input.first().json IS the already-parsed Ollama JSON response\nconst resp = $input.first().json;\nconst raw = resp.message?.content || resp.response || '';\n\n// Strip markdown fences if Ollama wrapped it anyway\nlet code = raw.trim();\nconst fenceMatch = code.match(/```(?:openscad|scad)?\\n([\\s\\S]*?)```/i);\nif (fenceMatch) code = fenceMatch[1].trim();\n\n// Pull context from Build Prompt node (HTTP Request replaced our json)\nconst buildData = $('Build Prompt').first().json;\n\nreturn [{ json: {\n  code,\n  description: buildData.description || '',\n  channelId: buildData.channelId || '',\n  userId: buildData.userId || '',\n  userName: buildData.userName || 'user',\n} }];"
-      },
-      "id": "cad-extract-01",
-      "name": "Extract Code",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        880,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://host.docker.internal:8189/render",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ code: $json.code, description: $json.description }) }}",
-        "options": {
-          "timeout": 600000
-        }
-      },
-      "id": "cad-render-01",
-      "name": "Render 3D",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1100,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const render = $input.first().json;\nconst codeData = $('Extract Code').first().json;\n\nconst code        = codeData.code || '';\nconst description = codeData.description || '';\nconst channelId   = codeData.channelId || '';\nconst success     = render.success || false;\nconst jobId       = render.job_id || '';\nconst stlPath     = render.stl_path || null;\nconst pngB64      = render.png_b64 || null;\n\nreturn [{ json: { code, description, channelId, success, jobId, stlPath, pngB64 } }];"
+        "jsCode": "const d = $input.first().json;\n\nconst code        = d.code || '';\nconst description = d.description || '';\nconst channelId   = d.channelId || '';\nconst userId      = d.userId || '';\nconst userName    = d.userName || 'user';\nconst success     = d.success || false;\nconst jobId       = d.job_id || '';\nconst stlPath     = d.stl_path || null;\nconst pngB64      = d.png_b64 || null;\nconst attempts    = d.attempts || 1;\nconst error       = d.error || null;\n\nreturn [{ json: { code, description, channelId, userId, userName, success, jobId, stlPath, pngB64, attempts, error } }];\n"
       },
       "id": "cad-format-01",
       "name": "Format Response",
@@ -152,7 +109,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ (() => {\n  const d = $input.first().json;\n  const channelId   = d.channelId || '';\n  const description = d.description || '';\n  const stlPath     = d.stlPath || null;\n  const code        = d.code || '';\n  const jobId       = d.jobId || '';\n  const success     = d.success !== false;\n  const imageUrl = jobId ? 'https://appendicular-wilson-looser.ngrok-free.dev/webhook/preview-3d?job=' + jobId : null;\n\n  const scadPath = stlPath ? stlPath.replace(/\\.stl$/, '.scad') : null;\n  const codeSnip = code.length > 2600\n    ? code.slice(0, 2600) + '\\n// ... (full code saved at ' + (scadPath || 'server') + ')'\n    : code;\n\n  const blocks = [\n    { type: 'header', text: { type: 'plain_text', text: ':triangular_ruler: 3D Model Generated', emoji: true } },\n    { type: 'section', text: { type: 'mrkdwn', text: '*' + description + '*' } },\n  ];\n\n  if (imageUrl) {\n    blocks.push({ type: 'image', image_url: imageUrl, alt_text: '3D model preview' });\n  }\n\n  blocks.push({ type: 'divider' });\n\n  if (stlPath) {\n    blocks.push({ type: 'section', text: { type: 'mrkdwn',\n      text: ':white_check_mark: *STL:* `' + stlPath + '`\\n_Slice in PrusaSlicer / Bambu Studio / Cura to print_' } });\n  }\n  if (!success) {\n    blocks.push({ type: 'section', text: { type: 'mrkdwn',\n      text: ':warning: *Render warning* — check the code manually in OpenSCAD' } });\n  }\n\n  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '*OpenSCAD source:*\\n```\\n' + codeSnip + '\\n```' } });\n  const hint = jobId\n    ? `:pencil: Paste code into OpenSCAD to edit · _Job: \\`${jobId}\\` · Improve with \\`/3d improve ${jobId} <changes>\\`_`\n    : ':pencil: Paste code into OpenSCAD to edit';\n  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: hint }] });\n\n  return JSON.stringify({ channel: channelId, blocks, unfurl_links: false });\n})() }}",
+        "body": "={{ (() => {\n  const d = $input.first().json;\n  const channelId   = d.channelId || '';\n  const description = d.description || '';\n  const stlPath     = d.stlPath || null;\n  const code        = d.code || '';\n  const jobId       = d.jobId || '';\n  const success     = d.success !== false;\n  const attempts    = d.attempts || 1;\n  const error       = d.error || null;\n  const imageUrl = jobId ? 'https://appendicular-wilson-looser.ngrok-free.dev/webhook/preview-3d?job=' + jobId : null;\n\n  // Truncate code for Slack block (3000 char limit per block)\n  const codePath = stlPath ? stlPath.replace(/\\.stl$/, '.py') : null;\n  const codeSnip = code.length > 2600\n    ? code.slice(0, 2600) + '\\n# ... (full code saved at ' + (codePath || 'server') + ')'\n    : code;\n\n  const blocks = [\n    { type: 'header', text: { type: 'plain_text', text: ':triangular_ruler: 3D Model Generated', emoji: true } },\n    { type: 'section', text: { type: 'mrkdwn', text: '*' + description + '*' } },\n  ];\n\n  if (imageUrl) {\n    blocks.push({ type: 'image', image_url: imageUrl, alt_text: '3D model preview' });\n  }\n\n  blocks.push({ type: 'divider' });\n\n  if (stlPath) {\n    blocks.push({ type: 'section', text: { type: 'mrkdwn',\n      text: ':white_check_mark: *STL:* `' + stlPath + '`\\n_Slice in PrusaSlicer / Bambu Studio / Cura to print_' } });\n  }\n\n  if (!success || error) {\n    const errMsg = error ? error.slice(0, 300) : 'Model generation had issues \u2014 check the code manually.';\n    blocks.push({ type: 'section', text: { type: 'mrkdwn',\n      text: ':warning: *Generation issue:* ' + errMsg } });\n  } else if (attempts > 1) {\n    blocks.push({ type: 'section', text: { type: 'mrkdwn',\n      text: ':repeat: _Self-corrected in ' + attempts + ' attempt' + (attempts > 1 ? 's' : '') + '_' } });\n  }\n\n  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '*CadQuery source:*\\n```\\n' + codeSnip + '\\n```' } });\n\n  const hint = jobId\n    ? ':pencil: Paste into CadQuery / Python to edit \u00b7 _Job: `' + jobId + '` \u00b7 Improve with `/3d improve ' + jobId + ' <changes>`_'\n    : ':pencil: Paste code into CadQuery / Python to edit \u00b7 _Improve with `/3d code <description>\\\\n<paste code>`_';\n  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: hint }] });\n\n  return JSON.stringify({ channel: channelId, blocks, unfurl_links: false });\n})() }}",
         "options": {}
       },
       "id": "fc8de743-e612-42a6-820e-c7e068ed4ca8",
@@ -181,7 +138,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const https = require('https');\n\nfunction httpsReq(options, body) {\n  return new Promise((resolve, reject) => {\n    if (Buffer.isBuffer(body)) {\n      options.headers = options.headers || {};\n      options.headers['Content-Length'] = body.length;\n    }\n    const req = https.request(options, (res) => {\n      const chunks = [];\n      res.on('data', c => chunks.push(c));\n      res.on('end', () => {\n        const text = Buffer.concat(chunks).toString();\n        try { resolve(JSON.parse(text)); } catch { resolve({ _raw: text }); }\n      });\n    });\n    req.on('error', reject);\n    if (body) req.write(body);\n    req.end();\n  });\n}\n\nconst token = $env.SLACK_BOT_TOKEN;\nconst item = $input.first();\nconst b64 = item.binary && item.binary.data ? item.binary.data.data : null;\n\nif (!b64) {\n  return [{ json: { ...item.json, fileId: null, uploaded: false } }];\n}\n\nconst buf = Buffer.from(b64, 'base64');\nconst mimeType = item.binary.data.mimeType || 'application/octet-stream';\nconst fileName = item.binary.data.fileName || 'file.bin';\nconst channelId = item.json.channelId || '';\nconst description = item.json.description || '';\nconst stlPath = item.json.stlPath || null;\n\n// Step 0: Join the channel so the bot can share files there\n// (chat.postMessage works without joining, but files.completeUploadExternal requires membership)\nif (channelId) {\n  const joinBody = `channel=${encodeURIComponent(channelId)}`;\n  await httpsReq({\n    method: 'POST', hostname: 'slack.com',\n    path: '/api/conversations.join',\n    headers: {\n      'Authorization': `Bearer ${token}`,\n      'Content-Type': 'application/x-www-form-urlencoded',\n      'Content-Length': Buffer.byteLength(joinBody),\n    }\n  }, Buffer.from(joinBody));\n  // Ignore join errors (may already be a member, or private channel)\n}\n\n// Step 1: Get upload URL\nconst body1 = `filename=${encodeURIComponent(fileName)}&length=${buf.length}`;\nconst urlData = await httpsReq({\n  method: 'POST', hostname: 'slack.com',\n  path: '/api/files.getUploadURLExternal',\n  headers: {\n    'Authorization': `Bearer ${token}`,\n    'Content-Type': 'application/x-www-form-urlencoded',\n    'Content-Length': Buffer.byteLength(body1),\n  }\n}, Buffer.from(body1));\n\nif (!urlData.ok) throw new Error(`getUploadURL failed: ${JSON.stringify(urlData)}`);\nconst { upload_url, file_id } = urlData;\n\n// Step 2: PUT binary\nconst urlMatch = upload_url.match(/^https?:\\/\\/([^\\/]+)(\\/[^?]*)?(\\?.*)?$/);\nawait httpsReq({\n  method: 'PUT', hostname: urlMatch[1],\n  path: (urlMatch[2] || '/') + (urlMatch[3] || ''),\n  headers: { 'Content-Type': mimeType, 'Content-Length': buf.length }\n}, buf);\n\n// Step 3: Complete + share to channel — now that bot has joined, this should work\nconst comment = `:triangular_ruler: *3D Preview* — ${description}`\n  + (stlPath ? `\\n:white_check_mark: STL: \\`${stlPath}\\`\\n_Open in PrusaSlicer, Bambu Studio, or OpenSCAD_` : '');\n\nconst completeBody = JSON.stringify({\n  files: [{ id: file_id }],\n  ...(channelId ? { channel_id: channelId } : {}),\n  initial_comment: comment,\n});\n\nconst completeResp = await httpsReq({\n  method: 'POST', hostname: 'slack.com',\n  path: '/api/files.completeUploadExternal',\n  headers: {\n    'Authorization': `Bearer ${token}`,\n    'Content-Type': 'application/json',\n    'Content-Length': Buffer.byteLength(completeBody),\n  }\n}, Buffer.from(completeBody));\n\nconst fileShared = completeResp.ok || false;\nconst fileError = completeResp.error || null;\n\nreturn [{ json: {\n  ...item.json,\n  fileId: file_id,\n  uploaded: true,\n  fileShared,\n  fileError,\n} }];"
+        "jsCode": "const https = require('https');\n\nfunction httpsReq(options, body) {\n  return new Promise((resolve, reject) => {\n    if (Buffer.isBuffer(body)) {\n      options.headers = options.headers || {};\n      options.headers['Content-Length'] = body.length;\n    }\n    const req = https.request(options, (res) => {\n      const chunks = [];\n      res.on('data', c => chunks.push(c));\n      res.on('end', () => {\n        const text = Buffer.concat(chunks).toString();\n        try { resolve(JSON.parse(text)); } catch { resolve({ _raw: text }); }\n      });\n    });\n    req.on('error', reject);\n    if (body) req.write(body);\n    req.end();\n  });\n}\n\nconst token = $env.SLACK_BOT_TOKEN;\nconst item = $input.first();\nconst b64 = item.binary && item.binary.data ? item.binary.data.data : null;\n\nif (!b64) {\n  return [{ json: { ...item.json, fileId: null, uploaded: false } }];\n}\n\nconst buf = Buffer.from(b64, 'base64');\nconst mimeType = item.binary.data.mimeType || 'application/octet-stream';\nconst fileName = item.binary.data.fileName || 'file.bin';\nconst channelId = item.json.channelId || '';\nconst description = item.json.description || '';\nconst stlPath = item.json.stlPath || null;\n\n// Step 0: Join the channel so the bot can share files there\n// (chat.postMessage works without joining, but files.completeUploadExternal requires membership)\nif (channelId) {\n  const joinBody = `channel=${encodeURIComponent(channelId)}`;\n  await httpsReq({\n    method: 'POST', hostname: 'slack.com',\n    path: '/api/conversations.join',\n    headers: {\n      'Authorization': `Bearer ${token}`,\n      'Content-Type': 'application/x-www-form-urlencoded',\n      'Content-Length': Buffer.byteLength(joinBody),\n    }\n  }, Buffer.from(joinBody));\n  // Ignore join errors (may already be a member, or private channel)\n}\n\n// Step 1: Get upload URL\nconst body1 = `filename=${encodeURIComponent(fileName)}&length=${buf.length}`;\nconst urlData = await httpsReq({\n  method: 'POST', hostname: 'slack.com',\n  path: '/api/files.getUploadURLExternal',\n  headers: {\n    'Authorization': `Bearer ${token}`,\n    'Content-Type': 'application/x-www-form-urlencoded',\n    'Content-Length': Buffer.byteLength(body1),\n  }\n}, Buffer.from(body1));\n\nif (!urlData.ok) throw new Error(`getUploadURL failed: ${JSON.stringify(urlData)}`);\nconst { upload_url, file_id } = urlData;\n\n// Step 2: PUT binary\nconst urlMatch = upload_url.match(/^https?:\\/\\/([^\\/]+)(\\/[^?]*)?(\\?.*)?$/);\nawait httpsReq({\n  method: 'PUT', hostname: urlMatch[1],\n  path: (urlMatch[2] || '/') + (urlMatch[3] || ''),\n  headers: { 'Content-Type': mimeType, 'Content-Length': buf.length }\n}, buf);\n\n// Step 3: Complete + share to channel \u2014 now that bot has joined, this should work\nconst comment = `:triangular_ruler: *3D Preview* \u2014 ${description}`\n  + (stlPath ? `\\n:white_check_mark: STL: \\`${stlPath}\\`\\n_Open in PrusaSlicer, Bambu Studio, or OpenSCAD_` : '');\n\nconst completeBody = JSON.stringify({\n  files: [{ id: file_id }],\n  ...(channelId ? { channel_id: channelId } : {}),\n  initial_comment: comment,\n});\n\nconst completeResp = await httpsReq({\n  method: 'POST', hostname: 'slack.com',\n  path: '/api/files.completeUploadExternal',\n  headers: {\n    'Authorization': `Bearer ${token}`,\n    'Content-Type': 'application/json',\n    'Content-Length': Buffer.byteLength(completeBody),\n  }\n}, Buffer.from(completeBody));\n\nconst fileShared = completeResp.ok || false;\nconst fileError = completeResp.error || null;\n\nreturn [{ json: {\n  ...item.json,\n  fileId: file_id,\n  uploaded: true,\n  fileShared,\n  fileError,\n} }];"
       },
       "id": "b6ffbbdf-36bd-4777-8c2b-3826180b31de",
       "name": "Upload to Slack",
@@ -198,47 +155,25 @@
       "main": [
         [
           {
-            "node": "Build Prompt",
+            "node": "Build Payload",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Prompt": {
+    "Build Payload": {
       "main": [
         [
           {
-            "node": "Generate OpenSCAD",
+            "node": "Generate 3D",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate OpenSCAD": {
-      "main": [
-        [
-          {
-            "node": "Extract Code",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Code": {
-      "main": [
-        [
-          {
-            "node": "Render 3D",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Render 3D": {
+    "Generate 3D": {
       "main": [
         [
           {
@@ -253,7 +188,7 @@
       "main": [
         [
           {
-            "node": "Post to Slack",
+            "node": "Decode PNG",
             "type": "main",
             "index": 0
           }
@@ -271,17 +206,6 @@
         ]
       ]
     },
-    "Post to Slack": {
-      "main": [
-        [
-          {
-            "node": "Respond OK",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Upload to Slack": {
       "main": [
         [
@@ -292,9 +216,22 @@
           }
         ]
       ]
+    },
+    "Post to Slack": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": {},
+  "settings": {
+    "executionTimeout": 900
+  },
   "staticData": null,
   "updatedAt": "2026-03-14T00:24:50.000Z"
 }
